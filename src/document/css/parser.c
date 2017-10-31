@@ -10,17 +10,21 @@
 
 #include "elinks.h"
 
+#include "config/options.h"
+#include "document/css/css.h"
 #include "document/css/parser.h"
 #include "document/css/property.h"
 #include "document/css/scanner.h"
 #include "document/css/stylesheet.h"
 #include "document/css/value.h"
-#include "document/html/parser.h"
 #include "util/color.h"
 #include "util/lists.h"
 #include "util/error.h"
 #include "util/memory.h"
 #include "util/string.h"
+
+static void css_parse_ruleset(struct css_stylesheet *css,
+			      struct scanner *scanner);
 
 
 void
@@ -110,16 +114,53 @@ skip_css_block(struct scanner *scanner)
 	}
 }
 
-/** Parse an atrule from @a scanner and update @a css accordingly.
+/* Parse a list of media types.
  *
- * Atrules grammar:
+ * Media types grammar:
  *
  * @verbatim
  * media_types:
  *	  <empty>
  *	| <ident>
  *	| media_types ',' <ident>
+ * @endverbatim
  *
+ * This does not entirely match appendix D of CSS2: ELinks allows any
+ * list of media types to be empty, whereas CSS2 allows that only in
+ * @@import and not in @@media.
+ *
+ * @return nonzero if the directive containing this list should take
+ * effect, zero if not.
+ */
+static int
+css_parse_media_types(struct scanner *scanner)
+{
+	int matched = 0;
+	int empty = 1;
+	const unsigned char *const optstr = get_opt_str("document.css.media", NULL);
+	struct scanner_token *token = get_scanner_token(scanner);
+
+	while (token && token->type == CSS_TOKEN_IDENT) {
+		empty = 0;
+		if (!matched) /* Skip string ops if already matched. */
+			matched = supports_css_media_type(
+				optstr, token->string, token->length);
+
+		token = get_next_scanner_token(scanner);
+		if (!token || token->type != ',')
+			break;
+
+		token = get_next_scanner_token(scanner);
+	}
+
+	return matched || empty;
+}
+
+/** Parse an atrule from @a scanner and update @a css accordingly.
+ *
+ * Atrules grammar:
+ *
+ * @verbatim
  * atrule:
  * 	  '@charset' <string> ';'
  *	| '@import' <string> media_types ';'
@@ -134,38 +175,81 @@ css_parse_atrule(struct css_stylesheet *css, struct scanner *scanner,
 		 struct uri *base_uri)
 {
 	struct scanner_token *token = get_scanner_token(scanner);
+	struct string import_uri;
 
 	/* Skip skip skip that code */
 	switch (token->type) {
 		case CSS_TOKEN_AT_IMPORT:
 			token = get_next_scanner_token(scanner);
 			if (!token) break;
+			if (token->type != CSS_TOKEN_STRING
+			    && token->type != CSS_TOKEN_URL)
+				goto skip_rest_of_atrule;
 
-			if (token->type == CSS_TOKEN_STRING
-			    || token->type == CSS_TOKEN_URL) {
-				assert(css->import);
-				css->import(css, base_uri, token->string, token->length);
+			/* As of 2007-07, token->string points into the
+			 * original CSS text, so the pointer will remain
+			 * valid even if we parse more tokens.  But this
+			 * may have to change when backslash escapes are
+			 * properly supported.  So play it safe and make
+			 * a copy of the string.  */
+			if (!init_string(&import_uri))
+				goto skip_rest_of_atrule;
+			if (!add_bytes_to_string(&import_uri,
+						 token->string,
+						 token->length)) {
+				done_string(&import_uri);
+				goto skip_rest_of_atrule;
 			}
-			skip_css_tokens(scanner, ';');
+
+			skip_scanner_token(scanner);
+			if (!css_parse_media_types(scanner)) {
+				done_string(&import_uri);
+				goto skip_rest_of_atrule;
+			}
+
+			token = get_scanner_token(scanner);
+			if (!token || token->type != ';') {
+				done_string(&import_uri);
+				goto skip_rest_of_atrule;
+			}
+			skip_scanner_token(scanner);
+
+			assert(css->import);
+			css->import(css, base_uri,
+				    import_uri.source, import_uri.length);
+			done_string(&import_uri);
 			break;
 
 		case CSS_TOKEN_AT_CHARSET:
 			skip_css_tokens(scanner, ';');
 			break;
 
-		case CSS_TOKEN_AT_FONT_FACE:
 		case CSS_TOKEN_AT_MEDIA:
+			skip_scanner_token(scanner);
+			if (!css_parse_media_types(scanner))
+				goto skip_rest_of_atrule;
+			token = get_scanner_token(scanner);
+			if (!token || token->type != '{')
+				goto skip_rest_of_atrule;
+			token = get_next_scanner_token(scanner);
+			while (token && token->type != '}') {
+				css_parse_ruleset(css, scanner);
+				token = get_scanner_token(scanner);
+			}
+			if (token)
+				skip_scanner_token(scanner);
+			break;
+
+		case CSS_TOKEN_AT_FONT_FACE:
 		case CSS_TOKEN_AT_PAGE:
 			skip_css_block(scanner);
 			break;
 
+skip_rest_of_atrule:
 		case CSS_TOKEN_AT_KEYWORD:
 			/* TODO: Unkown @-rule so either skip til ';' or next block. */
-			while (scanner_has_tokens(scanner)) {
-				token = get_next_scanner_token(scanner);
-
-				if (!token) break;
-
+			token = get_scanner_token(scanner);
+			while (token) {
 				if (token->type == ';') {
 					skip_scanner_token(scanner);
 					break;
@@ -174,6 +258,8 @@ css_parse_atrule(struct css_stylesheet *css, struct scanner *scanner,
 					skip_css_block(scanner);
 					break;
 				}
+
+				token = get_next_scanner_token(scanner);
 			}
 			break;
 		default:
@@ -187,21 +273,21 @@ struct selector_pkg {
 	struct css_selector *selector;
 };
 
-/** Move a CSS selector and its leaves into a new list.  If a similar
- * selector already exists in the list, merge them.
+/** Move a CSS selector and its leaves into a new set.  If a similar
+ * selector already exists in the set, merge them.
  *
  * @param sels
- *   The list to which @a selector should be moved.  Must not be NULL.
+ *   The set to which @a selector should be moved.  Must not be NULL.
  * @param selector
  *   The selector that should be moved.  Must not be NULL.  If it is
- *   already in some list, this function removes it from there.
+ *   already in some set, this function removes it from there.
  * @param watch
  *   This function updates @a *watch if it merges that selector into
  *   another one.  @a watch must not be NULL but @a *watch may be.
  *
  * @returns @a selector or the one into which it was merged.  */
 static struct css_selector *
-reparent_selector(LIST_OF(struct css_selector) *sels,
+reparent_selector(struct css_selector_set *sels,
                   struct css_selector *selector,
                   struct css_selector **watch)
 {
@@ -212,8 +298,8 @@ reparent_selector(LIST_OF(struct css_selector) *sels,
 	if (twin) {
 		merge_css_selectors(twin, selector);
 		/* Reparent leaves. */
-		while (selector->leaves.next != &selector->leaves) {
-			struct css_selector *leaf = selector->leaves.next;
+		while (!css_selector_set_empty(&selector->leaves)) {
+			struct css_selector *leaf = css_selector_set_front(&selector->leaves);
 
 			reparent_selector(&twin->leaves, leaf, watch);
 		}
@@ -221,8 +307,9 @@ reparent_selector(LIST_OF(struct css_selector) *sels,
 			*watch = twin;
 		done_css_selector(selector);
 	} else {
-		if (selector->next) del_from_list(selector);
-		add_to_list(*sels, selector);
+		if (css_selector_is_in_set(selector))
+			del_css_selector_from_set(selector);
+		add_css_selector_to_set(selector, sels);
 	}
 
 	return twin ? twin : selector;
@@ -392,9 +479,9 @@ css_parse_selector(struct css_stylesheet *css, struct scanner *scanner,
 				/* The situation is like: 'div p#x', now it was
 				 * 'p -> div', but we need to redo that as
 				 * '(p ->) #x -> div'. */
-				del_from_list(last_chained_selector);
-				add_to_list(selector->leaves,
-				            last_chained_selector);
+				del_css_selector_from_set(last_chained_selector);
+				add_css_selector_to_set(last_chained_selector,
+							&selector->leaves);
 			}
 
 			if (pkg->selector == base_sel) {
@@ -409,7 +496,7 @@ css_parse_selector(struct css_stylesheet *css, struct scanner *scanner,
 				 * wasn't marked so and thus wasn't bound to
 				 * the stylesheet. Let's do that now. */
 				assert(prev_element_selector);
-				prev_element_selector->relation = CSR_ROOT;
+				set_css_selector_relation(prev_element_selector, CSR_ROOT);
 				prev_element_selector =
 					reparent_selector(&css->selectors,
 					                 prev_element_selector,
@@ -427,10 +514,11 @@ css_parse_selector(struct css_stylesheet *css, struct scanner *scanner,
 			if (!selector) continue;
 
 			assert(prev_element_selector);
-			add_to_list(selector->leaves, prev_element_selector);
+			set_css_selector_relation(prev_element_selector, reltype);
+			add_css_selector_to_set(prev_element_selector,
+						&selector->leaves);
 			last_chained_selector = prev_element_selector;
 
-			prev_element_selector->relation = reltype;
 		}
 
 
@@ -524,7 +612,7 @@ css_parse_ruleset(struct css_stylesheet *css, struct scanner *scanner)
 		 * because GCC 4.1 "warning: operation on `errfile'
 		 * may be undefined" breaks the build with -Werror.  */
 		int dbg_has_properties = !list_empty(properties);
-		int dbg_has_leaves = !list_empty(pkg->selector->leaves);
+		int dbg_has_leaves = !css_selector_set_empty(&pkg->selector->leaves);
 
 		DBG("Binding properties (!!%d) to selector %s (type %d, relation %d, children %d)",
 			dbg_has_properties,
@@ -541,7 +629,7 @@ css_parse_ruleset(struct css_stylesheet *css, struct scanner *scanner)
 
 void
 css_parse_stylesheet(struct css_stylesheet *css, struct uri *base_uri,
-		     unsigned char *string, unsigned char *end)
+		     const unsigned char *string, const unsigned char *end)
 {
 	struct scanner scanner;
 

@@ -150,7 +150,7 @@ add_bittorrent_meta_to_string(struct string *msg, struct bittorrent_meta *meta,
 		add_format_to_string(msg, "\n%s: ",
 			_("Creation date", term));
 		add_date_to_string(msg,
-			get_opt_str("ui.date_format"),
+			get_opt_str("ui.date_format", NULL),
 			&meta->creation_date);
 	}
 #endif
@@ -616,8 +616,8 @@ abort_bittorrent_download_query(struct dialog_data *dlg_data)
 	done_bittorrent_download_info(info);
 }
 
-/** The download button handler. Basicly it redirects <uri> to bittorrent:<uri>
- * and starts displaying the download.
+/** The download button handler. Basicly it redirects \<uri> to
+ * bittorrent:\<uri> and starts displaying the download.
  *
  * bittorrent_query_callback() passes this function as a
  * ::widget_handler_T to add_dlg_button().  */
@@ -694,7 +694,7 @@ tp_show_header(struct dialog_data *dlg_data, struct widget_data *widget_data)
  * ::bittorrent_fetch_callback_T to init_bittorrent_fetch().  */
 static void
 bittorrent_query_callback(void *data, struct connection_state state,
-			    struct string *response)
+			  struct bittorrent_const_string *response)
 {
 	/* [gettext_accelerator_context(.bittorrent_query_callback)] */
 	struct type_query *type_query = data;

@@ -8,6 +8,8 @@
 #define _GNU_SOURCE /* strcasestr() */
 #endif
 
+#include <libgen.h> /* basename() */
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,19 +68,19 @@ html_a(struct html_context *html_context, unsigned char *a,
 			; /* Shut up compiler */
 #ifdef CONFIG_GLOBHIST
 		} else if (get_global_history_item(format.link)) {
-			format.style.fg = format.vlink;
+			format.style.color.foreground = format.color.vlink;
 			html_top->pseudo_class &= ~ELEMENT_LINK;
 			html_top->pseudo_class |= ELEMENT_VISITED;
 #endif
 #ifdef CONFIG_BOOKMARKS
 		} else if (get_bookmark(format.link)) {
-			format.style.fg = format.bookmark_link;
+			format.style.color.foreground = format.color.bookmark_link;
 			html_top->pseudo_class &= ~ELEMENT_VISITED;
 			/* XXX: Really set ELEMENT_LINK? --pasky */
 			html_top->pseudo_class |= ELEMENT_LINK;
 #endif
 		} else {
-			format.style.fg = format.clink;
+			format.style.color.foreground = format.color.clink;
 			html_top->pseudo_class &= ~ELEMENT_VISITED;
 			html_top->pseudo_class |= ELEMENT_LINK;
 		}
@@ -199,12 +201,12 @@ put_image_label(unsigned char *a, unsigned char *label,
 	 * extension to the standard. After all, it makes sense. */
 	html_focusable(html_context, a);
 
-	saved_foreground = format.style.fg;
+	saved_foreground = format.style.color.foreground;
 	saved_attr = format.style.attr;
-	format.style.fg = format.image_link;
+	format.style.color.foreground = format.color.image_link;
 	format.style.attr |= AT_NO_ENTITIES;
 	put_chrs(html_context, label, strlen(label));
-	format.style.fg = saved_foreground;
+	format.style.color.foreground = saved_foreground;
 	format.style.attr = saved_attr;
 }
 
@@ -372,7 +374,7 @@ put_link_line(unsigned char *prefix, unsigned char *linkname,
 	put_chrs(html_context, prefix, strlen(prefix));
 	format.link = join_urls(html_context->base_href, link);
 	format.target = stracpy(target);
-	format.style.fg = format.clink;
+	format.style.color.foreground = format.color.clink;
 	/* linkname typically comes from get_attr_val, which
 	 * has already expanded character entity references.
 	 * Tell put_chrs not to expand them again.  */
@@ -406,6 +408,27 @@ html_applet(struct html_context *html_context, unsigned char *a,
 
 	mem_free_if(alt);
 	mem_free(code);
+}
+
+void
+html_audio(struct html_context *html_context, unsigned char *a,
+            unsigned char *xxx3, unsigned char *xxx4, unsigned char **xxx5)
+{
+	unsigned char *url;
+
+	/* This just places a link where a audio element would be. */
+
+	url = get_url_val(a, "src", html_context->doc_cp);
+	if (!url) return;
+
+	html_focusable(html_context, a);
+
+	put_link_line("Audio: ", basename(url), url,
+              html_context->options->framename, html_context);
+
+	html_skip(html_context, a);
+
+	mem_free(url);
 }
 
 static void
@@ -516,7 +539,7 @@ html_embed(struct html_context *html_context, unsigned char *a,
 
 	/* If there is no extension we want to get the default mime/type
 	 * anyway? */
-	extension = strrchr(object_src, '.');
+	extension = strrchr((const char *)object_src, '.');
 	if (!extension) extension = object_src;
 
 	type = get_extension_content_type(extension);
@@ -531,7 +554,26 @@ html_embed(struct html_context *html_context, unsigned char *a,
 	mem_free_set(&object_src, NULL);
 }
 
+void
+html_video(struct html_context *html_context, unsigned char *a,
+            unsigned char *xxx3, unsigned char *xxx4, unsigned char **xxx5)
+{
+	unsigned char *url;
 
+	/* This just places a link where a video element would be. */
+
+	url = get_url_val(a, "src", html_context->doc_cp);
+	if (!url) return;
+
+	html_focusable(html_context, a);
+
+	put_link_line("Video: ", basename(url), url,
+              html_context->options->framename, html_context);
+
+	html_skip(html_context, a);
+
+	mem_free(url);
+}
 
 /* Link types:
 
@@ -647,7 +689,7 @@ struct hlink {
 	unsigned char *charset;
 	unsigned char *target;
 	unsigned char *id;
-	unsigned char *class;
+	unsigned char *class_;
 	unsigned char *dir;
 */
 };
@@ -763,21 +805,21 @@ html_link_parse(struct html_context *html_context, unsigned char *a,
 			return 1;
 		}
 
-	if (c_strcasestr(link->name, "icon") ||
-	   (link->content_type && c_strcasestr(link->content_type, "icon"))) {
+	if (c_strcasestr((const char *)link->name, "icon") ||
+	   (link->content_type && c_strcasestr((const char *)link->content_type, "icon"))) {
 		link->type = LT_ICON;
 
-	} else if (c_strcasestr(link->name, "alternate")) {
+	} else if (c_strcasestr((const char *)link->name, "alternate")) {
 		link->type = LT_ALTERNATE;
 		if (link->lang)
 			link->type = LT_ALTERNATE_LANG;
-		else if (c_strcasestr(link->name, "stylesheet") ||
-			 (link->content_type && c_strcasestr(link->content_type, "css")))
+		else if (c_strcasestr((const char *)link->name, "stylesheet") ||
+			 (link->content_type && c_strcasestr((const char *)link->content_type, "css")))
 			link->type = LT_ALTERNATE_STYLESHEET;
 		else if (link->media)
 			link->type = LT_ALTERNATE_MEDIA;
 
-	} else if (link->content_type && c_strcasestr(link->content_type, "css")) {
+	} else if (link->content_type && c_strcasestr((const char *)link->content_type, "css")) {
 		link->type = LT_STYLESHEET;
 	}
 
@@ -802,7 +844,8 @@ html_link(struct html_context *html_context, unsigned char *a,
 	if (!link.href) goto free_and_return;
 
 #ifdef CONFIG_CSS
-	if (link.type == LT_STYLESHEET) {
+	if (link.type == LT_STYLESHEET
+	    && supports_html_media_attr(link.media)) {
 		int len = strlen(link.href);
 
 		import_css_stylesheet(&html_context->css_styles,

@@ -18,6 +18,7 @@ enum term_mode_type {
 	TERM_LINUX,
 	TERM_KOI8,
 	TERM_FREEBSD,
+	TERM_FBTERM,
 };
 
 /** This is a bitmask describing the environment we are living in,
@@ -59,6 +60,11 @@ enum term_redrawing_state {
  * @todo TODO: Regroup the following into logical chunks. --pasky */
 struct terminal {
 	LIST_HEAD(struct terminal); /*!< ::terminals is the sentinel.  */
+
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+	struct JSObject *jsobject; /* Instance of terminal_class */
+	struct JSObject *session_array_jsobject; /* Instance of session_array_class */
+#endif
 
 	/** This is (at least partially) a stack of all the windows living in
 	 * this terminal. A window can be wide range of stuff, from a menu box
@@ -155,13 +161,19 @@ struct terminal {
 	/** For communication between instances */
 	struct terminal_interlink *interlink;
 
+	/* Data for textarea_edit(). */
+	void *textarea_data;
+
 	struct term_event_mouse prev_mouse_event;
 };
 
 #define do_not_ignore_next_mouse_event(term) \
 	memset(&(term)->prev_mouse_event, 0, sizeof((term)->prev_mouse_event))
 
-/** We keep track about all the terminals in this list. */
+/** We keep track about all the terminals in this list.
+ * The list is sorted so that terminals.next is the terminal
+ * from which ELinks most recently got an event.  But please
+ * call get_default_terminal() for that.  */
 extern LIST_OF(struct terminal) terminals;
 
 
@@ -172,6 +184,7 @@ void destroy_terminal(struct terminal *);
 void redraw_terminal(struct terminal *term);
 void redraw_terminal_cls(struct terminal *term);
 void cls_redraw_all_terminals(void);
+struct terminal *get_default_terminal(void);
 int get_terminal_codepage(const struct terminal *);
 
 void redraw_all_terminals(void);

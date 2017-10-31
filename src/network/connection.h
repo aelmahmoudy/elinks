@@ -19,6 +19,15 @@ struct connection {
 	LIST_OF(struct download) downloads;
 	struct progress *progress;
 
+	/** Progress of sending the request and attached files to the
+	 * server.  This happens before any download.
+	 *
+	 * Currently, ELinks supports file uploads only in HTTP and
+	 * local CGI.  Therefore, upload_stat_timer() in connection.c
+	 * assumes that #info points to struct http_connection_info
+	 * whenever @c http_upload_progress is not NULL.  */
+	struct progress *http_upload_progress;
+
 	/* If no proxy is used uri and proxied_uri are the same. */
 	struct uri *uri;
 	struct uri *proxied_uri;
@@ -52,7 +61,6 @@ struct connection {
 
 	int tries;
 	timer_id_T timer;
-	int stream_pipes[2];
 
 	unsigned int running:1;
 	unsigned int unrestartable:1;
@@ -91,7 +99,7 @@ void abort_connection(struct connection *, struct connection_state);
 void retry_connection(struct connection *, struct connection_state);
 
 void cancel_download(struct download *download, int interrupt);
-void move_download(struct download *old, struct download *new,
+void move_download(struct download *old, struct download *new_,
 		     enum connection_priority newpri);
 
 void detach_connection(struct download *, off_t);

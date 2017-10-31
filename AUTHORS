@@ -167,6 +167,10 @@ Eric Wald <eswald@gmail.com>
 Evan Hughes <hughes@lab43.org>
 	Bookmarks
 
+Fabienne Ducroquet <fabiduc@gmail.com>
+	Move-half-page-down and move-half-page-up actions
+	Customizable overlap for vertical scrolling
+
 Fabio Bonelli <fabiobonelli@libero.it>
 	Accept-language support
 	Italian translation updates
@@ -298,7 +302,10 @@ Kaloian Doganov <kaloian@europe.com>
 	Bulgarian translation update ;)
 
 Kamil Dudka <kdudka@redhat.com>
+	Allows relicensing under "GNU GPL v2 or later"
 	Fixed a security vulnerability in negotiate-auth
+	Rewriting rules for DuckDuckGo
+	nss_compat_ossl support
 	Fixed indentation in configure --help
 
 Karel Kulhavy <clock@atrey.karlin.mff.cuni.cz>
@@ -437,6 +444,10 @@ Muhamad Faizal <faizal@mfaizal.net>
 Nalin Dahyabhai <nalin@redhat.com>
 	Fixed occasional destroying of read buffer on Alpha
 
+Nils Dagsson Moskopp <nils@dieweltistgarnichtso.net>
+	Rudimentary support for the HTML5 media elements, <video> and
+	<audio>.
+
 Nuno Miguel Rodrigues <nmr@europa.net.dhis.org>
 	UnixWare console fix
 
@@ -467,6 +478,7 @@ Peder Stray <peder@ifi.uio.no>
 Peter Collingbourne <peter@peter.uk.to>
 	Allows relicensing under GPLv2-or-later and linking with OpenSSL
 	Fixed bug relating to newlines in hidden input fields
+	Fixed compiler errors and warnings in src/util/random.c where CONFIG_SSL undefined
 
 Peter Gervai <grin@tolna.net>
 	Manpage updates
@@ -549,6 +561,9 @@ Simen Graaten <simeng@slarkware.com>
 
 Simon Josefsson <simon@josefsson.org>
 	GnuTLS improvements
+
+Simon Ruderich <simon@ruderich.org>
+	Minor documentation updates
 
 Simon Wilkinson <simon@sxw.org.uk>
 	Support for X509 client certificates

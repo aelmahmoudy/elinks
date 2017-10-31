@@ -23,6 +23,7 @@
 #include "cache/cache.h"
 #include "config/options.h"
 #include "document/document.h"
+#include "document/html/renderer.h"
 #include "document/options.h"
 #include "document/renderer.h"
 #include "document/view.h"
@@ -53,6 +54,9 @@ static int dump_redir_count = 0;
 
 #define D_BUF	65536
 
+#define FRAME_CHARS_BEGIN 0xB0
+#define FRAME_CHARS_END   0xE0
+
 /** A place where dumping functions write their output.  The data
  * first goes to the buffer in this structure.  When the buffer is
  * full enough, it is flushed to a file descriptor or to a string.  */
@@ -68,9 +72,82 @@ struct dump_output {
 	 * flushed, or -1.  */
 	int fd;
 
+	/** Mapping of SCREEN_ATTR_FRAME characters.  If the target
+	 * codepage is UTF-8 (which is possible only if CONFIG_UTF8 is
+	 * defined), then the values are UTF-32.  Otherwise, they are
+	 * in the target codepage, even though the type may still be
+	 * unicode_val_T.  */
+#ifdef CONFIG_UTF8
+	unicode_val_T frame[FRAME_CHARS_END - FRAME_CHARS_BEGIN];
+#else
+	unsigned char frame[FRAME_CHARS_END - FRAME_CHARS_BEGIN];
+#endif
+
 	/** Bytes waiting to be flushed.  */
 	unsigned char buf[D_BUF];
 };
+
+/** Mapping from CP437 box-drawing characters to simpler CP437 characters.
+ * - Map mixed light/double lines to light lines or double lines,
+ *   depending on the majority; or to light lines if even.
+ * - Map double lines to light lines.
+ * - Map light and dark shades to medium, then to full blocks.
+ * - Map half blocks to full blocks.
+ * - Otherwise map to ASCII characters.  */
+static const unsigned char frame_simplify[FRAME_CHARS_END - FRAME_CHARS_BEGIN]
+= {
+	/*-0    -1    -2    -3    -4    -5    -6    -7 */
+	/*-8    -9    -A    -B    -C    -D    -E    -F */
+	0xB1, 0xDB, 0xB1, '|' , '+' , 0xB4, 0xB9, 0xBF, /* 0xB0...0xB7 */
+	0xC5, 0xB4, 0xB3, 0xBF, 0xD9, 0xD9, 0xD9, '+' , /* 0xB8...0xBF */
+	'+' , '+' , '+' , '+' , '-' , '+' , 0xC3, 0xCC, /* 0xC0...0xC7 */
+	0xC0, 0xDA, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xCA, /* 0xC8...0xCF */
+	0xC1, 0xCB, 0xC2, 0xC0, 0xC0, 0xDA, 0xDA, 0xC5, /* 0xD0...0xD7 */
+	0xC5, '+' , '+' , '#' , 0xDB, 0xDB, 0xDB, 0xDB  /* 0xD8...0xDF */
+};
+
+/** Initialize dump_output::frame for the specified codepage.
+ *
+ * If the codepage does not support all the box-drawing characters
+ * of CP437, then map them to simpler characters, according to
+ * frame_simplify.
+ *
+ * @relates dump_output */
+static void
+dump_output_prepare_frame(struct dump_output *out, int to_cp)
+{
+	const int cp437 = get_cp_index("cp437");
+	int orig;
+	unsigned char subst;
+
+#ifdef CONFIG_UTF8
+	if (is_cp_utf8(to_cp)) {
+		for (orig = FRAME_CHARS_BEGIN; orig < FRAME_CHARS_END; orig++)
+			out->frame[orig - FRAME_CHARS_BEGIN]
+				= cp2u(cp437, orig);
+		return;
+	}
+#endif /* CONFIG_UTF8 */
+
+	for (orig = FRAME_CHARS_BEGIN; orig < FRAME_CHARS_END; orig++) {
+		for (subst = orig;
+		     subst >= FRAME_CHARS_BEGIN && subst < FRAME_CHARS_END;
+		     subst = frame_simplify[subst - FRAME_CHARS_BEGIN]) {
+			unicode_val_T ucs = cp2u(cp437, subst);
+			const unsigned char *result = u2cp_no_nbsp(ucs, to_cp);
+
+			if (result && cp2u(to_cp, result[0]) == ucs
+			    && !result[1]) {
+				subst = result[0];
+				break;
+			}
+			/* Otherwise, the mapping from ucs to to_cp
+			 * was not accurate, and this loop will try
+			 * a simpler character.  */
+		}
+		out->frame[orig - FRAME_CHARS_BEGIN] = subst;
+	}
+}
 
 /** Allocate and initialize a struct dump_output.
  * The caller should eventually free the structure with mem_free().
@@ -83,11 +160,15 @@ struct dump_output {
  *   The string to which the output will be appended.
  *   Use NULL if the output should go to a file descriptor instead.
  *
+ * @param cp
+ *   The codepage of the dump.  It need not match the codepage
+ *   of the document.
+ *
  * @return The new structure, or NULL on error.
  *
  * @relates dump_output */
 static struct dump_output *
-dump_output_alloc(int fd, struct string *string)
+dump_output_alloc(int fd, struct string *string, int cp)
 {
 	struct dump_output *out;
 
@@ -99,6 +180,8 @@ dump_output_alloc(int fd, struct string *string)
 		out->fd = fd;
 		out->string = string;
 		out->bufpos = 0;
+
+		dump_output_prepare_frame(out, cp);
 	}
 	return out;
 }
@@ -242,10 +325,14 @@ write_true_color(const unsigned char *str, const unsigned char *color,
 static int
 dump_references(struct document *document, int fd, unsigned char buf[D_BUF])
 {
-	if (document->nlinks && get_opt_bool("document.dump.references")) {
+	if (document->nlinks
+	    && get_opt_bool("document.dump.references", NULL)) {
+		unsigned char key_sym[64] = {0};
 		int x;
 		unsigned char *header = "\nReferences\n\n   Visible links\n";
+		const unsigned char *label_key = get_opt_str("document.browse.links.label_key", NULL);
 		int headlen = strlen(header);
+		int base = strlen(label_key);
 
 		if (hard_write(fd, header, headlen) != headlen)
 			return -1;
@@ -258,12 +345,15 @@ dump_references(struct document *document, int fd, unsigned char buf[D_BUF])
 			if (!where) continue;
 
 			if (document->options.links_numbering) {
+
+				dec2qwerty(x + 1, key_sym, label_key, base);
+
 				if (link->title && *link->title)
-					snprintf(buf, D_BUF, "%4d. %s\n\t%s\n",
-						 x + 1, link->title, where);
+					snprintf(buf, D_BUF, "%4s. %s\n\t%s\n",
+						 key_sym, link->title, where);
 				else
-					snprintf(buf, D_BUF, "%4d. %s\n",
-						 x + 1, where);
+					snprintf(buf, D_BUF, "%4s. %s\n",
+						 key_sym, where);
 			} else {
 				if (link->title && *link->title)
 					snprintf(buf, D_BUF, "   . %s\n\t%s\n",
@@ -284,7 +374,8 @@ dump_references(struct document *document, int fd, unsigned char buf[D_BUF])
 int
 dump_to_file(struct document *document, int fd)
 {
-	struct dump_output *out = dump_output_alloc(fd, NULL);
+	struct dump_output *out = dump_output_alloc(fd, NULL,
+						    document->options.cp);
 	int error;
 
 	if (!out) return -1;
@@ -311,21 +402,21 @@ dump_formatted(int fd, struct download *download, struct cache_entry *cached)
 
 	memset(&formatted, 0, sizeof(formatted));
 
-	init_document_options(&o);
-	width = get_opt_int("document.dump.width");
+	init_document_options(NULL, &o);
+	width = get_opt_int("document.dump.width", NULL);
 	set_box(&o.box, 0, 1, width, DEFAULT_TERMINAL_HEIGHT);
 
-	o.cp = get_opt_codepage("document.dump.codepage");
-	o.color_mode = get_opt_int("document.dump.color_mode");
+	o.cp = get_opt_codepage("document.dump.codepage", NULL);
+	o.color_mode = get_opt_int("document.dump.color_mode", NULL);
 	o.plain = 0;
 	o.frames = 0;
-	o.links_numbering = get_opt_bool("document.dump.numbering");
+	o.links_numbering = get_opt_bool("document.dump.numbering", NULL);
 
 	init_vs(&vs, cached->uri, -1);
 
 	render_document(&vs, &formatted, &o);
 
-	out = dump_output_alloc(fd, NULL);
+	out = dump_output_alloc(fd, NULL, o.cp);
 	if (out) {
 		int error;
 
@@ -473,7 +564,7 @@ subst_url(unsigned char *str, struct string *url)
 static void
 dump_print(unsigned char *option, struct string *url)
 {
-	unsigned char *str = get_opt_str(option);
+	unsigned char *str = get_opt_str(option, NULL);
 
 	if (str) {
 		unsigned char *realstr = subst_url(str, url);
@@ -610,7 +701,7 @@ add_document_to_string(struct string *string, struct document *document)
 	assert(string && document);
 	if_assert_failed return NULL;
 
-	out = dump_output_alloc(-1, string);
+	out = dump_output_alloc(-1, string, document->options.cp);
 	if (!out) return NULL;
 
 	error = dump_nocolor(document, out);

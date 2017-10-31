@@ -148,6 +148,9 @@ kbd_ctrl_c(void)
 	struct interlink_event ev;
 
 	if (!ditrm) return;
+	/* This is called because of a signal, and there may be input
+	 * pending from the terminal, so do not reset
+	 * ditrm->bracketed_pasting.  */
 	set_kbd_interlink_event(&ev, KBD_CTRL_C, KBD_MOD_NONE);
 	itrm_queue_event(ditrm, (unsigned char *) &ev, sizeof(ev));
 }
@@ -158,6 +161,7 @@ kbd_ctrl_c(void)
 
 #define INIT_TERMINAL_SEQ	"\033)0\0337"	/**< Special Character and Line Drawing Set, Save Cursor */
 #define INIT_ALT_SCREEN_SEQ	"\033[?47h"	/**< Use Alternate Screen Buffer */
+#define INIT_BRACKETED_PASTE_SEQ "\033[?2004h"	/**< Enable XTerm bracketed paste mode */
 
 static void
 send_init_sequence(int h, int altscreen)
@@ -171,15 +175,18 @@ send_init_sequence(int h, int altscreen)
 #ifdef CONFIG_MOUSE
 	send_mouse_init_sequence(h);
 #endif
+	write_sequence(h, INIT_BRACKETED_PASTE_SEQ);
 }
 
 #define DONE_CLS_SEQ		"\033[2J"	/**< Erase in Display, Clear All */
 #define DONE_TERMINAL_SEQ	"\0338\r \b"	/**< Restore Cursor (DECRC) + ??? */
 #define DONE_ALT_SCREEN_SEQ	"\033[?47l"	/**< Use Normal Screen Buffer */
+#define DONE_BRACKETED_PASTE_SEQ "\033[?2004l"	/**< Disable XTerm bracketed paste mode */
 
 static void
 send_done_sequence(int h, int altscreen)
 {
+	write_sequence(h, DONE_BRACKETED_PASTE_SEQ);
 	write_sequence(h, DONE_CLS_SEQ);
 
 #ifdef CONFIG_MOUSE
@@ -227,7 +234,7 @@ static int
 setraw(struct itrm *itrm, int save_orig)
 {
 	struct termios t;
-	long vdisable;
+	long vdisable = -1;
 
 	memset(&t, 0, sizeof(t));
 	if (tcgetattr(itrm->in.ctl, &t)) return -1;
@@ -236,13 +243,19 @@ setraw(struct itrm *itrm, int save_orig)
 
 #ifdef _POSIX_VDISABLE
 	vdisable = _POSIX_VDISABLE;
-#else
+#elif defined(HAVE_FPATHCONF)
 	vdisable = fpathconf(itrm->in.ctl, _PC_VDISABLE);
 #endif
+
+#ifdef VERASE
+/* Is VERASE defined on Windows? */
 	if (vdisable != -1 && t.c_cc[VERASE] == vdisable)
 		itrm->verase = -1;
 	else
 		itrm->verase = (unsigned char) t.c_cc[VERASE];
+#else
+	itrm->verase = -1;
+#endif
 
 	elinks_cfmakeraw(&t);
 	t.c_lflag |= ISIG;
@@ -373,6 +386,8 @@ unblock_itrm_x(void *h)
 	close_handle(h);
 	if (!ditrm) return;
 	unblock_itrm();
+
+	/* Note: External editor support depends on this resize event. */
 	resize_terminal();
 }
 
@@ -465,14 +480,15 @@ free_itrm(struct itrm *itrm)
 static inline void
 resize_terminal_from_str(unsigned char *text)
 {
-	enum { NEW_WIDTH = 0, NEW_HEIGHT, OLD_WIDTH, OLD_HEIGHT, NUMBERS } i;
+	enum { NEW_WIDTH = 0, NEW_HEIGHT, OLD_WIDTH, OLD_HEIGHT, NUMBERS };
 	int numbers[NUMBERS];
+	int i;
 
 	assert(text && *text);
 	if_assert_failed return;
 
 	for (i = 0; i < NUMBERS; i++) {
-		unsigned char *p = strchr(text, ',');
+		unsigned char *p = strchr((const char *)text, ',');
 
 		if (p) {
 			*p++ = '\0';
@@ -553,7 +569,7 @@ static void
 in_sock(struct itrm *itrm)
 {
 	struct string path;
-	struct string delete;
+	struct string delete_;
 	char ch;
 	int fg; /* enum term_exec */
 	ssize_t bytes_read, i, p;
@@ -599,7 +615,7 @@ has_nul_byte:
 		add_char_to_string(&path, ch);
 	}
 
-	if (!init_string(&delete)) {
+	if (!init_string(&delete_)) {
 		done_string(&path);
 		goto free_and_return;
 	}
@@ -607,13 +623,13 @@ has_nul_byte:
 	while (1) {
 		RD(ch);
 		if (!ch) break;
-		add_char_to_string(&delete, ch);
+		add_char_to_string(&delete_, ch);
 	}
 
 #undef RD
 
 	if (!*path.source) {
-		dispatch_special(delete.source);
+		dispatch_special(delete_.source);
 
 	} else {
 		int blockh;
@@ -624,12 +640,12 @@ has_nul_byte:
 		 * in a blocked terminal?  There is similar code in
 		 * exec_on_terminal().  --KON, 2007 */
 		if (is_blocked() && fg != TERM_EXEC_BG) {
-			if (*delete.source) unlink(delete.source);
+			if (*delete_.source) unlink(delete_.source);
 			goto nasty_thing;
 		}
 
 		path_len = path.length;
-		del_len = delete.length;
+		del_len = delete_.length;
 		param_len = path_len + del_len + 3;
 
 		param = mem_alloc(param_len);
@@ -637,7 +653,7 @@ has_nul_byte:
 
 		param[0] = fg;
 		memcpy(param + 1, path.source, path_len + 1);
-		memcpy(param + 1 + path_len + 1, delete.source, del_len + 1);
+		memcpy(param + 1 + path_len + 1, delete_.source, del_len + 1);
 
 		if (fg == TERM_EXEC_FG) block_itrm();
 
@@ -665,7 +681,7 @@ has_nul_byte:
 
 nasty_thing:
 	done_string(&path);
-	done_string(&delete);
+	done_string(&delete_);
 	assert(ITRM_OUT_QUEUE_SIZE - p > 0);
 	memmove(buf, buf + p, ITRM_OUT_QUEUE_SIZE - p);
 	bytes_read -= p;
@@ -903,6 +919,9 @@ decode_terminal_escape_sequence(struct itrm *itrm, struct interlink_event *ev)
 		case 33: kbd.key = KBD_F9; kbd.modifier = KBD_MOD_SHIFT; break;
 		case 34: kbd.key = KBD_F10; kbd.modifier = KBD_MOD_SHIFT; break;
 
+		case 200: itrm->bracketed_pasting = 1; break;    /* xterm */
+		case 201: itrm->bracketed_pasting = 0; break;    /* xterm */
+
 		} break;
 
 	case 'R': resize_terminal(); break;	/*    CPR  u6 */
@@ -1039,6 +1058,7 @@ kbd_timeout(struct itrm *itrm)
 		set_kbd_event(itrm, &ev, itrm->in.queue.data[0], KBD_MOD_NONE);
 		el = 1;
 	}
+	itrm->bracketed_pasting = 0;
 	itrm_queue_event(itrm, (char *) &ev, sizeof(ev));
 
 	itrm->in.queue.len -= el;
@@ -1156,13 +1176,18 @@ process_queue(struct itrm *itrm)
 
 	if (el == 0) {
 		el = 1;
-		set_kbd_event(itrm, &ev, itrm->in.queue.data[0], KBD_MOD_NONE);
+		set_kbd_event(itrm, &ev, itrm->in.queue.data[0],
+			      itrm->bracketed_pasting ? KBD_MOD_PASTE : KBD_MOD_NONE);
 	}
 
 	/* The call to decode_terminal_escape_sequence() might have changed the
 	 * keyboard event to a mouse event. */
-	if (ev.ev == EVENT_MOUSE || ev.info.keyboard.key != KBD_UNDEF)
+	if (ev.ev == EVENT_MOUSE || ev.info.keyboard.key != KBD_UNDEF) {
 		itrm_queue_event(itrm, (char *) &ev, sizeof(ev));
+		itrm->bracketed_pasting = 
+			(ev.ev == EVENT_KBD
+			 && (ev.info.keyboard.modifier & KBD_MOD_PASTE));
+	}
 
 return_without_event:
 	if (el == -1) {

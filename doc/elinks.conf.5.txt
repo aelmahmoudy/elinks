@@ -9,10 +9,11 @@ elinks.conf - ELinks configuration file
 SYNOPSIS
 --------
 [verse]
-set     <option> = <value>
-unset   <option>
-bind    "<keymap>" "<key>" = "<action>"
-include "<file>"
+set        <option> = <value>
+set_domain <domain> <option> = <value>
+unset      <option>
+bind       "<keymap>" "<key>" = "<action>"
+include    "<file>"
 
 DESCRIPTION
 -----------
@@ -23,8 +24,9 @@ protocol behaviour, keybindings, colors used for rendering and for the user
 interface.
 
 It is read at startup and saved only when requested. All options described in
-this document can be fully configured from within ELinks so no editing of
-elinks.conf is needed.
+this document can be configured from within ELinks. Editing of elinks.conf is
+needed only if you want to override the values of some options in individual
+domains (`set_domain`).
 
 // elinks-web/website.conf links "the MIME chapter of the ELinks manual" below
 

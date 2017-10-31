@@ -49,6 +49,7 @@
 #include "util/color.h"
 #include "util/error.h"
 #include "util/file.h"
+#include "util/hash.h"
 #include "util/memdebug.h"
 #include "util/memory.h"
 #include "viewer/dump/dump.h"
@@ -71,7 +72,8 @@ check_stdio(LIST_OF(struct string_list_item) *url_list)
 		/* Only start reading from stdin if no URL was given on the
 		 * command line. */
 		if (url_list && list_empty(*url_list)) {
-			get_opt_bool("protocol.file.allow_special_files") = 1;
+			get_opt_bool("protocol.file.allow_special_files",
+			             NULL) = 1;
 			add_to_string_list(url_list, "file:///dev/stdin", 17);
 		}
 		get_cmd_opt_bool("no-connect") = 1;
@@ -191,7 +193,7 @@ init(void)
 		/* The ECMAScript code is not good at coping with this. And it
 		 * makes currently no sense to evaluate ECMAScript in this
 		 * context anyway. */
-		get_opt_bool("ecmascript.enable") = 0;
+		get_opt_bool("ecmascript.enable", NULL) = 0;
 #endif
 		if (!list_empty(url_list)) {
 			dump_next(&url_list);
@@ -301,6 +303,9 @@ terminate_all_subsystems(void)
 	done_options();
 	done_event();
 	terminate_osdep();
+#ifdef CONFIG_COMBINE
+	free_combined();
+#endif
 }
 
 void
@@ -327,21 +332,9 @@ check_if_root(void)
 #define check_if_root()
 #endif
 
-#ifdef CONFIG_GC
-static void
-gc_warning(char *msg, GC_word arg)
-{
-}
-#endif
-
-
 int
 main(int argc, char *argv[])
 {
-#ifdef CONFIG_GC
-	GC_INIT();
-	GC_set_warn_proc(gc_warning);
-#endif
 	check_if_root();
 
 	program.terminate = 0;

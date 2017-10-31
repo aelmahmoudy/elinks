@@ -1,17 +1,22 @@
 #ifndef EL__ECMASCRIPT_SPIDERMONKEY_SHARED_H
 #define EL__ECMASCRIPT_SPIDERMONKEY_SHARED_H
 
-/* For wild SpiderMonkey installations. */
+/* Tell SpiderMonkey headers which operating system will be used.
+ * With standalone SpiderMonkey 1.8.5, "pkg-config --cflags mozjs185"
+ * does not define such a macro, so ELinks must do that here.
+ * With xulrunner 2.0 however, "pkg-config --cflags mozilla-js"
+ * already outputs -DXP_UNIX or similar.  To prevent a warning about
+ * macro redefinition, define the macro as 1, like -D does.  */
 #ifdef CONFIG_OS_BEOS
-#define XP_BEOS
+#define XP_BEOS 1
 #elif CONFIG_OS_OS2
-#define XP_OS2
+#define XP_OS2 1
 #elif CONFIG_OS_RISCOS
 #error Out of luck, buddy!
 #elif CONFIG_OS_UNIX
-#define XP_UNIX
+#define XP_UNIX 1
 #elif CONFIG_OS_WIN32
-#define XP_WIN
+#define XP_WIN 1
 #endif
 
 #include <jsapi.h>
@@ -50,6 +55,7 @@ JSObject *spidermonkey_InitClass(JSContext *cx, JSObject *obj,
 
 static void undef_to_jsval(JSContext *ctx, jsval *vp);
 static unsigned char *jsval_to_string(JSContext *ctx, jsval *vp);
+static unsigned char *jsid_to_string(JSContext *ctx, jsid *id);
 
 /* Inline functions */
 
@@ -68,7 +74,17 @@ jsval_to_string(JSContext *ctx, jsval *vp)
 		return "";
 	}
 
-	return empty_string_or_(JS_GetStringBytes(JS_ValueToString(ctx, val)));
+	return empty_string_or_(JS_EncodeString(ctx, JS_ValueToString(ctx, val)));
+}
+
+static inline unsigned char *
+jsid_to_string(JSContext *ctx, jsid *id)
+{
+	jsval v;
+
+	/* TODO: check returned value */
+	JS_IdToValue(ctx, *id, &v);
+	return jsval_to_string(ctx, &v);
 }
 
 #endif

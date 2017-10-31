@@ -1,4 +1,4 @@
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><title>Example recipes</title><meta name="generator" content="DocBook XSL Stylesheets V1.76.1"><link rel="home" href="index.html" title="The ELinks Manual"><link rel="up" href="ch14.html" title="Chapter 14. Scripting ELinks with Lua"><link rel="prev" href="ch14s03.html" title="Using ELinks with Lua"><link rel="next" href="ch15.html" title="Chapter 15. Scripting ELinks with ECMAScript"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Example recipes</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="ch14s03.html">Prev</a> </td><th width="60%" align="center">Chapter 14. Scripting ELinks with Lua</th><td width="20%" align="right"> <a accesskey="n" href="ch15.html">Next</a></td></tr></table><hr></div><div class="section" title="Example recipes"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="idp6987280"></a>Example recipes</h2></div></div></div><p>This chapter contains some example scripts that you can use.  All of them come
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><title>Example recipes</title><meta name="generator" content="DocBook XSL Stylesheets V1.76.1"><link rel="home" href="index.html" title="The ELinks Manual"><link rel="up" href="ch14.html" title="Chapter 14. Scripting ELinks with Lua"><link rel="prev" href="ch14s03.html" title="Using ELinks with Lua"><link rel="next" href="ch15.html" title="Chapter 15. Scripting ELinks with ECMAScript"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Example recipes</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="ch14s03.html">Prev</a> </td><th width="60%" align="center">Chapter 14. Scripting ELinks with Lua</th><td width="20%" align="right"> <a accesskey="n" href="ch15.html">Next</a></td></tr></table><hr></div><div class="section" title="Example recipes"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="idp6113280"></a>Example recipes</h2></div></div></div><p>This chapter contains some example scripts that you can use.  All of them come
 from <code class="literal">contrib/lua/hooks.lua</code>.  I really recommend you to see it directly
 instead of copying code out of this document.  Also, not everything in there is
 covered here.</p><p>If you would like to contribute scripts, that would be great!  Please send
@@ -8,7 +8,7 @@ ideas, you'll just have to be a little creative :-)</p><p>Also take a look at th
 Note that Peter and Cliff don't maintain the Lua support intensively anymore,
 thus it would be probably nice to Cc me (<a class="ulink" href="mailto:pasky@ucw.cz" target="_top">pasky@ucw.cz</a>) if you want
 to contribute some patch, so that I would be able to add it to the ELinks
-distribution.</p><div class="section" title="Go to URL on steroids"><div class="titlepage"><div><div><h3 class="title"><a name="idp6992896"></a>Go to URL on steroids</h3></div></div></div><p>There are some web sites that I visit often.  Bookmarks are okay, but they are
+distribution.</p><div class="section" title="Go to URL on steroids"><div class="titlepage"><div><div><h3 class="title"><a name="idp6118896"></a>Go to URL on steroids</h3></div></div></div><p>There are some web sites that I visit often.  Bookmarks are okay, but they are
 separate from the "Go to URL" dialog box, so I keep forgetting to use them.
 Also, when I visit a search engine home page, all I really want to do is enter
 a search term.</p><p>The following script allows me to type certain strings into the "Go to URL"
@@ -67,7 +67,7 @@ function goto_url_hook (url, current_url)
     else
         return url
     end
-end</pre></div><div class="section" title="Expanding ~ (tilde)"><div class="titlepage"><div><div><h3 class="title"><a name="idp6998816"></a>Expanding ~ (tilde)</h3></div></div></div><p>By adding an extra snippet of code to the previous example, we can make ELinks
+end</pre></div><div class="section" title="Expanding ~ (tilde)"><div class="titlepage"><div><div><h3 class="title"><a name="idp6124816"></a>Expanding ~ (tilde)</h3></div></div></div><p>By adding an extra snippet of code to the previous example, we can make ELinks
 expand pathnames such as <code class="literal">~/foo/bar</code>
 and <code class="literal">~user/zappo</code>, like in the shell
 and other Unix programs.</p><pre class="screen">function goto_url_hook (url, current_url)
@@ -83,10 +83,10 @@ and other Unix programs.</p><pre class="screen">function goto_url_hook (url, cur
         end
 
                 .
-                .</pre></div><div class="section" title="Filtering crap"><div class="titlepage"><div><div><h3 class="title"><a name="idp7003024"></a>Filtering crap</h3></div></div></div><p>Many web pages nowadays have columns to the left and right of the text, which
+                .</pre></div><div class="section" title="Filtering crap"><div class="titlepage"><div><div><h3 class="title"><a name="idp6129024"></a>Filtering crap</h3></div></div></div><p>Many web pages nowadays have columns to the left and right of the text, which
 are utterly useless.  If you happen to be viewing the page in a 80x25 screen,
 the text you want to read ends up crammed into a tiny space in the centre.  We
-use ELinks Lua support to manipulate the HTML before it reaches the parser.</p><div class="section" title="linuxtoday.com"><div class="titlepage"><div><div><h4 class="title"><a name="idp7004368"></a>linuxtoday.com</h4></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>This recipe is out of date for the web site.</p></div><p>Linux Today has two problems when viewed in ELinks: the useless columns on the
+use ELinks Lua support to manipulate the HTML before it reaches the parser.</p><div class="section" title="linuxtoday.com"><div class="titlepage"><div><div><h4 class="title"><a name="idp6130368"></a>linuxtoday.com</h4></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>This recipe is out of date for the web site.</p></div><p>Linux Today has two problems when viewed in ELinks: the useless columns on the
 left and the right and all the text appears in cyan.  Here is a quick recipe
 to fix that:</p><pre class="screen">-- Plain string.find (no metacharacters)
 function sstrfind (s, pattern)
@@ -110,7 +110,7 @@ function pre_format_html_hook (url, html)
     end
 
     return nil
-end</pre></div><div class="section" title="linuxgames.com"><div class="titlepage"><div><div><h4 class="title"><a name="idp7008832"></a>linuxgames.com</h4></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>This recipe is out of date for the web site.</p></div><p>Here is a simpler example, for <a class="ulink" href="http://www.linuxgames.com/" target="_top">http://www.linuxgames.com/</a>.</p><pre class="screen">function pre_format_html_hook (url, html)
+end</pre></div><div class="section" title="linuxgames.com"><div class="titlepage"><div><div><h4 class="title"><a name="idp6134832"></a>linuxgames.com</h4></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>This recipe is out of date for the web site.</p></div><p>Here is a simpler example, for <a class="ulink" href="http://www.linuxgames.com/" target="_top">http://www.linuxgames.com/</a>.</p><pre class="screen">function pre_format_html_hook (url, html)
                 .
                 .
 
@@ -118,7 +118,7 @@ end</pre></div><div class="section" title="linuxgames.com"><div class="titlepage
         return string.gsub (html, "&lt;CENTER&gt;.-&lt;/center&gt;", "", 1)
 
                 .
-                .</pre></div></div><div class="section" title="Reading gzipped files"><div class="titlepage"><div><div><h3 class="title"><a name="idp7012320"></a>Reading gzipped files</h3></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>ELinks already supports gzipped files natively.</p></div><p>Sometimes documents come gzipped in order to save space, but then you need to
+                .</pre></div></div><div class="section" title="Reading gzipped files"><div class="titlepage"><div><div><h3 class="title"><a name="idp6138320"></a>Reading gzipped files</h3></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>ELinks already supports gzipped files natively.</p></div><p>Sometimes documents come gzipped in order to save space, but then you need to
 uncompress them to read them with ELinks.  Here is a recipe to handle gzipped
 files on a Unix system.</p><div class="warning" title="Warning" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Warning</h3><p>This recipe opens a temporary file insecurely.</p></div><pre class="screen">function pre_format_html_hook (url, html)
                 .
@@ -136,7 +136,7 @@ files on a Unix system.</p><div class="warning" title="Warning" style="margin-le
     end
 
                 .
-                .</pre></div><div class="section" title="Printing"><div class="titlepage"><div><div><h3 class="title"><a name="idp7016448"></a>Printing</h3></div></div></div><p>Printing a web page with ELinks usually involves quite a few steps: Save the
+                .</pre></div><div class="section" title="Printing"><div class="titlepage"><div><div><h3 class="title"><a name="idp6142448"></a>Printing</h3></div></div></div><p>Printing a web page with ELinks usually involves quite a few steps: Save the
 current document onto disk.  Run it through ELinks on the command-line (so it
 fits into 80 columns) to generate a plain text version.  Remove the 80th
 column from the text version, as it will make printers wrap down to the next
@@ -161,7 +161,7 @@ end
 -- Send the current document to `enscript'.
 function enscript ()
     pipe_formatted_to ("enscript -fCourier8")
-end</pre></div><div class="section" title="Deferring to Netscape"><div class="titlepage"><div><div><h3 class="title"><a name="idp7024352"></a>Deferring to Netscape</h3></div></div></div><p>If you come across a brain-dead web page that is totally unreadable with
+end</pre></div><div class="section" title="Deferring to Netscape"><div class="titlepage"><div><div><h3 class="title"><a name="idp6150352"></a>Deferring to Netscape</h3></div></div></div><p>If you come across a brain-dead web page that is totally unreadable with
 ELinks, you'd probably want to open it with a graphical browser.  The
 following function opens the current document in Netscape.</p><div class="tip" title="Tip" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Tip</h3><p>You can also use the built-in “URI passing” feature for this.</p></div><pre class="screen">-- When starting Netscape: Set to `nil' if you do not want
 -- to open a new window for each document.
@@ -172,11 +172,11 @@ function netscape ()
     local new = netscape_new_window and ",new_window" or ""
     execute ("( netscape -remote 'openURL("..current_url ()..new..")'"
              .." || netscape '"..current_url ().."' ) 2&gt;/dev/null &amp;")
-end</pre></div><div class="section" title="Alternative bookmark system"><div class="titlepage"><div><div><h3 class="title"><a name="idp7027936"></a>Alternative bookmark system</h3></div></div></div><p>Many people would like to have a bookmark system with categories (note that
+end</pre></div><div class="section" title="Alternative bookmark system"><div class="titlepage"><div><div><h3 class="title"><a name="idp6153936"></a>Alternative bookmark system</h3></div></div></div><p>Many people would like to have a bookmark system with categories (note that
 ELinks already supports that, marketing name Hierarchical bookmarks), and also
 to be able to view them and search for them in an HTML page.  I have written
 an alternative bookmark system (for ELinks), which some people may like better
-than the standard bookmark system.</p></div><div class="section" title="More ideas"><div class="titlepage"><div><div><h3 class="title"><a name="idp7029888"></a>More ideas</h3></div></div></div><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">
+than the standard bookmark system.</p></div><div class="section" title="More ideas"><div class="titlepage"><div><div><h3 class="title"><a name="idp6155888"></a>More ideas</h3></div></div></div><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem">
 The Lua interface needs to be redesigned to provide more flexible, coherent
    and usable interface to the scripts.
 </li><li class="listitem">

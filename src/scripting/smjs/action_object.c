@@ -37,30 +37,36 @@ smjs_action_fn_finalize(JSContext *ctx, JSObject *obj)
 	hop = JS_GetInstancePrivate(ctx, obj,
 				    (JSClass *) &action_fn_class, NULL);
 
-	if (hop) mem_free(hop);
+	mem_free_if(hop);
 }
 
 /* @action_fn_class.call */
 static JSBool
-smjs_action_fn_callback(JSContext *ctx, JSObject *obj, uintN argc, jsval *argv,
-                        jsval *rval)
+smjs_action_fn_callback(JSContext *ctx, uintN argc, jsval *rval)
 {
+	jsval value;
+	jsval *argv = JS_ARGV(ctx, rval);
 	struct smjs_action_fn_callback_hop *hop;
 	JSObject *fn_obj;
 
 	assert(smjs_ctx);
 	if_assert_failed return JS_FALSE;
 
-	*rval = JS_FALSE;
+	value = JSVAL_FALSE;
 
-	if (JS_TRUE != JS_ValueToObject(ctx, argv[-2], &fn_obj))
+	if (JS_TRUE != JS_ValueToObject(ctx, JS_CALLEE(ctx, rval), &fn_obj)) {
+		JS_SET_RVAL(ctx, rval, value);
 		return JS_TRUE;
+	}
 	assert(JS_InstanceOf(ctx, fn_obj, (JSClass *) &action_fn_class, NULL));
 	if_assert_failed return JS_FALSE;
 
 	hop = JS_GetInstancePrivate(ctx, fn_obj,
 				    (JSClass *) &action_fn_class, NULL);
-	if (!hop) return JS_TRUE;
+	if (!hop) {
+		JS_SET_RVAL(ctx, rval, value);
+		return JS_TRUE;
+	}
 
 	if (!would_window_receive_keypresses(hop->ses->tab)) {
 		/* The user cannot run actions in this tab by pressing
@@ -92,13 +98,14 @@ smjs_action_fn_callback(JSContext *ctx, JSObject *obj, uintN argc, jsval *argv,
 		int32 val;
 
 		if (JS_TRUE == JS_ValueToInt32(smjs_ctx, argv[0], &val)) {
-			hop->ses->kbdprefix.repeat_count = val;
+			set_kbd_repeat_count(hop->ses, val);
 		}
 	}
 
 	do_action(hop->ses, hop->action_id, 1);
 
-	*rval = JS_TRUE;
+	value = JSVAL_TRUE;
+	JS_SET_RVAL(ctx, rval, value);
 
 	return JS_TRUE;
 }
@@ -107,7 +114,7 @@ static const JSClass action_fn_class = {
 	"action_fn",
 	JSCLASS_HAS_PRIVATE,	/* struct smjs_action_fn_callback_hop * */
 	JS_PropertyStub, JS_PropertyStub,
-	JS_PropertyStub, JS_PropertyStub,
+	JS_PropertyStub, JS_StrictPropertyStub,
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub,
 	smjs_action_fn_finalize,
 	NULL, NULL,
@@ -152,14 +159,16 @@ smjs_get_action_fn_object(unsigned char *action_str)
 
 /* @action_class.getProperty */
 static JSBool
-action_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+action_get_property(JSContext *ctx, JSObject *obj, jsid id, jsval *vp)
 {
+	jsval val;
 	JSObject *action_fn;
 	unsigned char *action_str;
 
 	*vp = JSVAL_NULL;
 
-	action_str = JS_GetStringBytes(JS_ValueToString(ctx, id));
+	JS_IdToValue(ctx, id, &val);
+	action_str = JS_EncodeString(ctx, JS_ValueToString(ctx, val));
 	if (!action_str) return JS_TRUE;
 
 	action_fn = smjs_get_action_fn_object(action_str);
@@ -174,7 +183,7 @@ static const JSClass action_class = {
 	"action",
 	0,
 	JS_PropertyStub, JS_PropertyStub,
-	action_get_property, JS_PropertyStub,
+	action_get_property, JS_StrictPropertyStub,
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub,
 };
 

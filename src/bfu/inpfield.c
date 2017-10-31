@@ -103,10 +103,11 @@ check_nonempty(struct dialog_data *dlg_data, struct widget_data *widget_data)
 }
 
 void
-dlg_format_field(struct terminal *term,
+dlg_format_field(struct dialog_data *dlg_data,
 		 struct widget_data *widget_data,
 		 int x, int *y, int w, int *rw, enum format_align align, int format_only)
 {
+	struct terminal *term = dlg_data->win->term;
 	static int max_label_width;
 	static int *prev_y; /* Assert the uniqueness of y */	/* TODO: get rid of this !! --Zas */
 	unsigned char *label = widget_data->widget->text;
@@ -132,7 +133,7 @@ dlg_format_field(struct terminal *term,
 	if (label && *label) {
 		if (!format_only) text_color = get_bfu_color(term, "dialog.text");
 
-		dlg_format_text_do(term, label, x, y, w, rw, text_color, ALIGN_LEFT, format_only);
+		dlg_format_text_do(dlg_data, label, x, y, w, rw, text_color, ALIGN_LEFT, format_only);
 	}
 
 	/* XXX: We want the field and label on the same line if the terminal
@@ -140,7 +141,7 @@ dlg_format_field(struct terminal *term,
 	if (label && *label && float_label) {
 		if (widget_data->widget->info.field.flags & INPFIELD_FLOAT) {
 			(*y) -= INPUTFIELD_HEIGHT;
-			dlg_format_text_do(term, INPUTFIELD_FLOAT_SEPARATOR,
+			dlg_format_text_do(dlg_data, INPUTFIELD_FLOAT_SEPARATOR,
 					   x + label_width, y, w, rw,
 					   text_color, ALIGN_LEFT, format_only);
 			w -= INPUTFIELD_FLOAT_SEPARATOR_LEN + INPUTFIELD_FLOATLABEL_PADDING;
@@ -312,7 +313,7 @@ display_field_do(struct dialog_data *dlg_data, struct widget_data *widget_data,
 			if (term->utf8_cp)
 				w = utf8_cells2bytes(text, w, NULL);
 #endif /* CONFIG_UTF8 */
-			draw_text(term, widget_data->box.x, widget_data->box.y,
+			draw_dlg_text(dlg_data, widget_data->box.x, widget_data->box.y,
 				  text, w, 0, color);
 		} else {
 			struct box box;
@@ -476,7 +477,7 @@ kbd_field(struct dialog_data *dlg_data, struct widget_data *widget_data)
 #ifdef CONFIG_UTF8
 				if (term->utf8_cp) {
 					unsigned char *next = widget_data->cdata + widget_data->info.field.cpos;
-					unsigned char *end = strchr(next, '\0');
+					unsigned char *end = strchr((const char *)next, '\0');
 
 					utf8_to_unicode(&next, end);
 					widget_data->info.field.cpos = (int)(next - widget_data->cdata);
@@ -716,7 +717,7 @@ kbd_field(struct dialog_data *dlg_data, struct widget_data *widget_data)
 
 display_field:
 	display_widget(dlg_data, widget_data);
-	redraw_from_window(dlg_data->win);
+	redraw_windows(REDRAW_IN_FRONT_OF_WINDOW, dlg_data->win);
 	return EVENT_PROCESSED;
 }
 
@@ -763,7 +764,7 @@ input_line_layouter(struct dialog_data *dlg_data)
 		- ses->status.show_status_bar
 		- ses->status.show_tabs_bar;
 
-	dlg_format_field(win->term, dlg_data->widgets_data, 0,
+	dlg_format_field(dlg_data, dlg_data->widgets_data, 0,
 			 &y, win->term->width, NULL, ALIGN_LEFT, 0);
 }
 
@@ -855,6 +856,9 @@ cancel_input_line:
 
 		update_dialog_data(dlg_data);
 
+		/* Set action_id to -2 to signal to the handler that it should
+		 * not report errors or take any action except to search. */
+		action_id = -2;
 		goto send_action_to_handler;
 
 	case INPUT_LINE_PROCEED:

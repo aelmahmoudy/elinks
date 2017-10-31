@@ -10,11 +10,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ELinks 0.9.CVS\n"
 "Report-Msgid-Bugs-To: elinks-users@linuxfromscratch.org\n"
-"POT-Creation-Date: 2012-10-28 14:13+0200\n"
+"POT-Creation-Date: 2009-03-28 23:54+0200\n"
 "PO-Revision-Date: 2005-06-14 20:52+0200\n"
 "Last-Translator: Jens Seidel <jensseidel@users.sf.net>\n"
 "Language-Team: German <de@li.org>\n"
-"Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=ISO-8859-15\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -42,7 +41,7 @@ msgstr "Drücken Sie die Leertaste um diesen Ordner aufzuklappen."
 #: src/mime/dialogs.c:132 src/protocol/auth/dialogs.c:115
 #: src/protocol/protocol.c:246 src/scripting/lua/core.c:399
 #: src/scripting/lua/core.c:480 src/scripting/python/dialogs.c:86
-#: src/session/session.c:821 src/viewer/text/search.c:1710
+#: src/session/session.c:820 src/viewer/text/search.c:1704
 #, fuzzy
 msgid "~OK"
 msgstr "OK"
@@ -141,19 +140,19 @@ msgstr "Ja"
 msgid "~No"
 msgstr "Nein"
 
-#: src/bfu/hierbox.c:945 src/bfu/hierbox.c:976 src/viewer/text/search.c:1112
-#: src/viewer/text/search.c:1120 src/viewer/text/search.c:1136
-#: src/viewer/text/search.c:1729
+#: src/bfu/hierbox.c:945 src/bfu/hierbox.c:976 src/viewer/text/search.c:1106
+#: src/viewer/text/search.c:1114 src/viewer/text/search.c:1130
+#: src/viewer/text/search.c:1723
 msgid "Search"
 msgstr "Suche"
 
-#: src/bfu/hierbox.c:947 src/viewer/text/search.c:1113
+#: src/bfu/hierbox.c:947 src/viewer/text/search.c:1107
 #, c-format
 msgid "Search string '%s' not found"
 msgstr "Zeichenfolge '%s' konnte nicht gefunden werden"
 
 #: src/bfu/hierbox.c:976 src/config/dialogs.c:140 src/config/dialogs.c:329
-#: src/config/dialogs.c:477 src/cookies/dialogs.c:34 src/cookies/dialogs.c:366
+#: src/config/dialogs.c:479 src/cookies/dialogs.c:34 src/cookies/dialogs.c:366
 #: src/dialogs/edit.c:92 src/dialogs/edit.c:94 src/scripting/lua/core.c:395
 #: src/scripting/lua/core.c:396 src/scripting/lua/core.c:477
 msgid "Name"
@@ -172,7 +171,7 @@ msgstr "Zahl erwartet"
 msgid "Number should be in the range from %d to %d."
 msgstr "Zahl sollte im Bereich %d bis %d liegen."
 
-#: src/bfu/inpfield.c:99 src/config/dialogs.c:430
+#: src/bfu/inpfield.c:99 src/config/dialogs.c:432
 msgid "Bad string"
 msgstr "Unzulässige Zeichenfolge"
 
@@ -184,10 +183,10 @@ msgstr "Zeichenfolge darf nicht leer sein"
 #: src/bfu/inpfield.c:256 src/config/dialogs.c:366 src/cookies/dialogs.c:373
 #: src/cookies/dialogs.c:471 src/dialogs/edit.c:102 src/dialogs/edit.c:105
 #: src/dialogs/options.c:237 src/dialogs/options.c:316 src/mime/dialogs.c:133
-#: src/protocol/auth/dialogs.c:116 src/protocol/bittorrent/dialogs.c:820
+#: src/protocol/auth/dialogs.c:116 src/protocol/bittorrent/dialogs.c:814
 #: src/scripting/lua/core.c:400 src/scripting/lua/core.c:481
-#: src/session/download.c:740 src/session/download.c:1552
-#: src/viewer/text/search.c:1711
+#: src/session/download.c:633 src/session/download.c:1245
+#: src/viewer/text/search.c:1705
 #, fuzzy
 msgid "~Cancel"
 msgstr "Abbruch"
@@ -201,7 +200,7 @@ msgid "Digital clock in the status bar."
 msgstr "Digitale Uhrzeit in der Statuszeile."
 
 #: src/bfu/leds.c:77 src/bfu/leds.c:94 src/config/options.inc:1272
-#: src/config/options.inc:1279 src/ecmascript/ecmascript.c:44
+#: src/config/options.inc:1279 src/ecmascript/ecmascript.c:45
 #: src/globhist/globhist.c:64 src/mime/backend/mailcap.c:93
 #: src/mime/backend/mimetypes.c:52 src/network/ssl/ssl.c:81
 msgid "Enable"
@@ -456,7 +455,7 @@ msgid "~Goto"
 msgstr "Öffnen"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons)
-#: src/bookmarks/dialogs.c:594 src/config/dialogs.c:501
+#: src/bookmarks/dialogs.c:594 src/config/dialogs.c:503
 #: src/cookies/dialogs.c:492
 #, fuzzy
 msgid "~Edit"
@@ -464,14 +463,14 @@ msgstr "Bearbeiten"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/menu.c:ext_menu, src/formhist/dialogs.c:formhist_buttons, src/globhist/dialogs.c:globhist_buttons, src/protocol/auth/dialogs.c:auth_buttons)
 #: src/bookmarks/dialogs.c:595 src/cache/dialogs.c:231
-#: src/config/dialogs.c:503 src/config/dialogs.c:930 src/cookies/dialogs.c:493
+#: src/config/dialogs.c:505 src/config/dialogs.c:930 src/cookies/dialogs.c:493
 #: src/dialogs/menu.c:463 src/formhist/dialogs.c:211
 #: src/globhist/dialogs.c:229 src/protocol/auth/dialogs.c:263
 msgid "~Delete"
 msgstr "Löschen"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/menu.c:ext_menu)
-#: src/bookmarks/dialogs.c:596 src/config/dialogs.c:502
+#: src/bookmarks/dialogs.c:596 src/config/dialogs.c:504
 #: src/config/dialogs.c:929 src/cookies/dialogs.c:490 src/dialogs/menu.c:461
 msgid "~Add"
 msgstr "Hinzufügen"
@@ -496,7 +495,7 @@ msgstr "Verschieben"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/dialogs/menu.c:view_menu, src/globhist/dialogs.c:globhist_buttons)
 #: src/bookmarks/dialogs.c:600 src/cache/dialogs.c:232
-#: src/config/dialogs.c:504 src/config/dialogs.c:932 src/dialogs/menu.c:413
+#: src/config/dialogs.c:506 src/config/dialogs.c:932 src/dialogs/menu.c:413
 #: src/globhist/dialogs.c:230
 msgid "~Search"
 msgstr "~Suche"
@@ -641,7 +640,7 @@ msgid "Delete this cache entry?"
 msgstr "Diesen Cache-Eintrag löschen?"
 
 #. accelerator_context(display_download, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/download.c:download_buttons, src/formhist/dialogs.c:formhist_buttons, src/globhist/dialogs.c:globhist_buttons, src/protocol/auth/dialogs.c:auth_buttons)
-#: src/cache/dialogs.c:229 src/config/dialogs.c:500 src/cookies/dialogs.c:489
+#: src/cache/dialogs.c:229 src/config/dialogs.c:502 src/cookies/dialogs.c:489
 #: src/dialogs/download.c:255 src/dialogs/download.c:492
 #: src/formhist/dialogs.c:210 src/globhist/dialogs.c:225
 #: src/protocol/auth/dialogs.c:262
@@ -1925,8 +1924,8 @@ msgid "Description"
 msgstr "Beschreibung"
 
 #: src/config/dialogs.c:291 src/protocol/bittorrent/dialogs.c:600
-#: src/protocol/protocol.c:240 src/session/session.c:288
-#: src/session/session.c:999 src/viewer/text/textarea.c:583
+#: src/protocol/protocol.c:240 src/session/session.c:287
+#: src/session/session.c:995 src/viewer/text/textarea.c:583
 #: src/viewer/text/textarea.c:590
 msgid "Error"
 msgstr "Fehler"
@@ -1948,29 +1947,29 @@ msgstr ""
 "spezielle Option wie einen Ordner. Drücken Sie die Leertaste, um seinen "
 "Inhalt anzeigen zu lassen."
 
-#: src/config/dialogs.c:431
+#: src/config/dialogs.c:433
 msgid ""
 "Option names may only contain alpha-numeric characters\n"
-"in addition to '_', '-', '+', and '*'."
+"in addition to '_' and '-'."
 msgstr ""
 
-#: src/config/dialogs.c:452 src/config/dialogs.c:477
+#: src/config/dialogs.c:454 src/config/dialogs.c:479
 msgid "Add option"
 msgstr "Option hinzufügen"
 
-#: src/config/dialogs.c:453
+#: src/config/dialogs.c:455
 msgid "Cannot add an option here."
 msgstr "Hier kann keine Option hinzugefügt werden."
 
 #. accelerator_context(src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/formhist/dialogs.c:formhist_buttons, src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query, terminal_options)
-#: src/config/dialogs.c:505 src/config/dialogs.c:933 src/cookies/dialogs.c:495
+#: src/config/dialogs.c:507 src/config/dialogs.c:933 src/cookies/dialogs.c:495
 #: src/dialogs/options.c:236 src/formhist/dialogs.c:214
-#: src/protocol/bittorrent/dialogs.c:807 src/session/download.c:1536
+#: src/protocol/bittorrent/dialogs.c:801 src/session/download.c:1229
 #, fuzzy
 msgid "Sa~ve"
 msgstr "Speichern"
 
-#: src/config/dialogs.c:510
+#: src/config/dialogs.c:512
 msgid "Option manager"
 msgstr "Optionsmanager"
 
@@ -3294,7 +3293,7 @@ msgstr "Optionen für die Ausgabe (dump)."
 
 #. OPT_CODEPAGE
 #: src/config/options.inc:676 src/config/options.inc:980
-#: src/config/opttypes.c:486 src/dialogs/document.c:164
+#: src/config/opttypes.c:481 src/dialogs/document.c:164
 msgid "Codepage"
 msgstr "Zeichensatz"
 
@@ -3981,7 +3980,7 @@ msgstr "Text"
 msgid "Dialog text colors."
 msgstr "Farben des Textes in Dialogen."
 
-#: src/config/options.inc:1128 src/viewer/text/form.c:1888
+#: src/config/options.inc:1128 src/viewer/text/form.c:1891
 msgid "Checkbox"
 msgstr "Checkbox"
 
@@ -4032,7 +4031,7 @@ msgstr ""
 msgid "Selected button shortcut"
 msgstr "Ausgewählte Schaltfläche"
 
-#: src/config/options.inc:1156 src/viewer/text/form.c:1892
+#: src/config/options.inc:1156 src/viewer/text/form.c:1895
 msgid "Text field"
 msgstr "Textfeld"
 
@@ -4358,7 +4357,7 @@ msgid "When closing a tab show confirmation dialog."
 msgstr "Öffne Bestätigungsdialog beim Schließen einer Ansicht."
 
 #. OPT_LANGUAGE
-#: src/config/options.inc:1324 src/config/opttypes.c:488
+#: src/config/options.inc:1324 src/config/opttypes.c:483
 msgid "Language"
 msgstr "Sprache"
 
@@ -4532,66 +4531,66 @@ msgstr "Fehler beim Lesen"
 
 #. The OPT_ comments below are here to be found by grep.
 #. OPT_BOOL
-#: src/config/opttypes.c:477
+#: src/config/opttypes.c:472
 msgid "Boolean"
 msgstr "Wahrheitswert"
 
-#: src/config/opttypes.c:477
+#: src/config/opttypes.c:472
 msgid "[0|1]"
 msgstr "[0|1]"
 
 #. OPT_INT
-#: src/config/opttypes.c:479
+#: src/config/opttypes.c:474
 msgid "Integer"
 msgstr "Ganze Zahl"
 
-#: src/config/opttypes.c:479 src/config/opttypes.c:481
+#: src/config/opttypes.c:474 src/config/opttypes.c:476
 msgid "<num>"
 msgstr "<Nummer>"
 
 #. OPT_LONG
-#: src/config/opttypes.c:481
+#: src/config/opttypes.c:476
 msgid "Longint"
 msgstr "Longint"
 
 #. OPT_STRING
-#: src/config/opttypes.c:483
+#: src/config/opttypes.c:478
 msgid "String"
 msgstr "Zeichenfolge"
 
-#: src/config/opttypes.c:483
+#: src/config/opttypes.c:478
 msgid "<str>"
 msgstr "<Zeichenkette>"
 
-#: src/config/opttypes.c:486
+#: src/config/opttypes.c:481
 msgid "<codepage>"
 msgstr "<Zeichensatz>"
 
-#: src/config/opttypes.c:488
+#: src/config/opttypes.c:483
 msgid "<language>"
 msgstr "<Sprache>"
 
 #. OPT_COLOR
-#: src/config/opttypes.c:490
+#: src/config/opttypes.c:485
 msgid "Color"
 msgstr "Farbe"
 
-#: src/config/opttypes.c:490
+#: src/config/opttypes.c:485
 msgid "<color|#rrggbb>"
 msgstr "<Farbe|#rrggbb>"
 
 #. OPT_COMMAND
-#: src/config/opttypes.c:493
+#: src/config/opttypes.c:488
 msgid "Special"
 msgstr "speziell"
 
 #. OPT_ALIAS
-#: src/config/opttypes.c:496
+#: src/config/opttypes.c:491
 msgid "Alias"
 msgstr "Alias"
 
 #. OPT_TREE
-#: src/config/opttypes.c:499
+#: src/config/opttypes.c:494
 msgid "Folder"
 msgstr "Ordner"
 
@@ -4905,7 +4904,7 @@ msgid "No header info."
 msgstr "Keine Header-Informationen"
 
 #: src/dialogs/download.c:243 src/dialogs/menu.c:601
-#: src/protocol/bittorrent/dialogs.c:228 src/session/download.c:389
+#: src/protocol/bittorrent/dialogs.c:228 src/session/download.c:387
 msgid "Download"
 msgstr "Download"
 
@@ -5779,66 +5778,75 @@ msgstr ""
 "werden sollen."
 
 #. name:
-#: src/ecmascript/ecmascript.c:40 src/ecmascript/ecmascript.c:325
+#: src/ecmascript/ecmascript.c:41 src/ecmascript/ecmascript.c:351
 #, fuzzy
 msgid "ECMAScript"
 msgstr "Skripte"
 
-#: src/ecmascript/ecmascript.c:42
+#: src/ecmascript/ecmascript.c:43
 #, fuzzy
 msgid "ECMAScript options."
 msgstr "Einstellungen für das Rollen(Scrolling)"
 
-#: src/ecmascript/ecmascript.c:46
+#: src/ecmascript/ecmascript.c:47
 msgid "Whether to run those scripts inside of documents."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:48
+#: src/ecmascript/ecmascript.c:49
 msgid "Script error reporting"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:50
+#: src/ecmascript/ecmascript.c:51
 msgid "Open a message box when a script reports an error."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:52
+#: src/ecmascript/ecmascript.c:53
 msgid "Ignore <noscript> content"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:54
+#: src/ecmascript/ecmascript.c:55
 msgid ""
 "Whether to ignore content enclosed by the <noscript> tag when ECMAScript is "
 "enabled."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:57
+#: src/ecmascript/ecmascript.c:58
 #, fuzzy
 msgid "Maximum execution time"
 msgstr "Maximale Anzahl von Verbindungen"
 
-#: src/ecmascript/ecmascript.c:59
+#: src/ecmascript/ecmascript.c:60
 msgid "Maximum execution time in seconds for a script."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:61
+#: src/ecmascript/ecmascript.c:62
 msgid "Pop-up window blocking"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:63
+#: src/ecmascript/ecmascript.c:64
 msgid "Whether to disallow scripts to open new windows or tabs."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:241
+#: src/ecmascript/ecmascript.c:265
 msgid "JavaScript Emergency"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:243
+#: src/ecmascript/ecmascript.c:267
 #, c-format
 msgid ""
 "A script embedded in the current document was running\n"
 "for more than %d seconds. This probably means there is\n"
 "a bug in the script and it could have halted the whole\n"
 "ELinks, so the script execution was interrupted."
+msgstr ""
+
+#. name:
+#: src/ecmascript/see.c:186
+msgid "SEE"
+msgstr ""
+
+#: src/ecmascript/see/window.c:229 src/ecmascript/spidermonkey/window.c:331
+msgid "JavaScript Alert"
 msgstr ""
 
 #: src/ecmascript/spidermonkey.c:88
@@ -5851,12 +5859,8 @@ msgid "JavaScript Error"
 msgstr ""
 
 #. name:
-#: src/ecmascript/spidermonkey.c:334
+#: src/ecmascript/spidermonkey.c:321
 msgid "SpiderMonkey"
-msgstr ""
-
-#: src/ecmascript/spidermonkey/window.c:329
-msgid "JavaScript Alert"
 msgstr ""
 
 #: src/formhist/dialogs.c:67
@@ -6086,7 +6090,7 @@ msgstr ""
 "1 bedeutet Seitentitel"
 
 #. name:
-#: src/globhist/globhist.c:449
+#: src/globhist/globhist.c:452
 msgid "Global History"
 msgstr "Globaler Verlauf"
 
@@ -6421,7 +6425,7 @@ msgid "Option system"
 msgstr "Konfigurations-System"
 
 #. name:
-#: src/mime/backend/mailcap.c:89 src/mime/backend/mailcap.c:691
+#: src/mime/backend/mailcap.c:89 src/mime/backend/mailcap.c:686
 msgid "Mailcap"
 msgstr "Mailcap"
 
@@ -6482,7 +6486,7 @@ msgstr ""
 "Das heißt, dass auch Platzhalter (wie: image/*) überprüft werden,\n"
 "bevor der Bearbeiter ausgesucht wird."
 
-#: src/mime/backend/mailcap.c:356
+#: src/mime/backend/mailcap.c:351
 #, c-format
 msgid "Badly formated mailcap entry for type %s in \"%s\" line %d"
 msgstr ""
@@ -7398,7 +7402,7 @@ msgstr "Datei"
 msgid "Comment"
 msgstr "Kommentare"
 
-#: src/protocol/bittorrent/dialogs.c:229 src/session/download.c:390
+#: src/protocol/bittorrent/dialogs.c:229 src/session/download.c:388
 #, c-format
 msgid ""
 "Download complete:\n"
@@ -7569,41 +7573,41 @@ msgid_plural "%u unavailable"
 msgstr[0] "FTP-Dienst nicht verfügbar"
 msgstr[1] "FTP-Dienst nicht verfügbar"
 
-#: src/protocol/bittorrent/dialogs.c:584 src/session/session.c:279
+#: src/protocol/bittorrent/dialogs.c:584 src/session/session.c:278
 #, fuzzy, c-format
 msgid "Unable to retrieve %s"
 msgstr ""
 "In die Konfigurationsdatei %s kann nicht geschrieben werden.\n"
 "%s"
 
-#: src/protocol/bittorrent/dialogs.c:743
+#: src/protocol/bittorrent/dialogs.c:737
 #, fuzzy, c-format
 msgid "What would you like to do with the file '%s'?"
 msgstr "Soll die Datei '%s' (Typ: %s) angezeigt werden?"
 
-#: src/protocol/bittorrent/dialogs.c:760
+#: src/protocol/bittorrent/dialogs.c:754
 #, fuzzy
 msgid "Information about the torrent"
 msgstr "Zeige Informationen zur aktuellen Seite"
 
-#: src/protocol/bittorrent/dialogs.c:782 src/session/download.c:1439
+#: src/protocol/bittorrent/dialogs.c:776 src/session/download.c:1132
 msgid "What to do?"
 msgstr "Treffen Sie Ihre Wahl."
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback)
-#: src/protocol/bittorrent/dialogs.c:804
+#: src/protocol/bittorrent/dialogs.c:798
 #, fuzzy
 msgid "Down~load"
 msgstr "Download"
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query)
-#: src/protocol/bittorrent/dialogs.c:810 src/session/download.c:1542
+#: src/protocol/bittorrent/dialogs.c:804 src/session/download.c:1235
 #, fuzzy
 msgid "~Display"
 msgstr "Anzeigen"
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query)
-#: src/protocol/bittorrent/dialogs.c:814 src/session/download.c:1546
+#: src/protocol/bittorrent/dialogs.c:808 src/session/download.c:1239
 #, fuzzy
 msgid "Show ~header"
 msgstr "Vorlagen zeigen"
@@ -7729,7 +7733,7 @@ msgid "FTP specific options."
 msgstr "FTP-spezifische Optionen."
 
 #: src/protocol/ftp/ftp.c:60 src/protocol/http/http.c:128
-#: src/protocol/http/http.c:242
+#: src/protocol/http/http.c:235
 msgid "Proxy configuration"
 msgstr "Proxy-Konfiguration"
 
@@ -7738,7 +7742,7 @@ msgid "FTP proxy configuration."
 msgstr "FTP-Proxy-Konfiguration."
 
 #: src/protocol/ftp/ftp.c:64 src/protocol/http/http.c:132
-#: src/protocol/http/http.c:246
+#: src/protocol/http/http.c:239
 msgid "Host and port-number"
 msgstr "Host-Name und Port-Nummer"
 
@@ -7807,7 +7811,7 @@ msgstr ""
 "  nicht auftreten sollte.\n"
 
 #. name:
-#: src/protocol/http/http.c:95 src/protocol/http/http.c:257
+#: src/protocol/http/http.c:95 src/protocol/http/http.c:250
 msgid "HTTP"
 msgstr "HTTP"
 
@@ -7973,20 +7977,13 @@ msgstr ""
 "dies als potenzielles Sicherheitsrisiko ansehen, weil es dem Web-Master\n"
 "etwas über deine Sprache verrät."
 
-#. http://www.eweek.com/c/a/Desktops-and-Notebooks/Intel-Psion-End-Dispute-Concerning-Netbook-Trademark-288875/
-#. * responds with "Transfer-Encoding: chunked" and
-#. * "Content-Encoding: gzip" but does not compress the first chunk
-#. * and the last chunk, causing ELinks to display garbage.
-#. * (If User-Agent includes "Gecko" (case sensitive), then
-#. * that server correctly compresses the whole stream.)
-#. * ELinks should instead report the decompression error (bug 1017)
-#. * or perhaps even blacklist the server for compression and retry.
-#. * Until that has been implemented, disable compression by default.
-#: src/protocol/http/http.c:194
+#. After the compression support has been tested enough,
+#. * we might wrap this option in #if CFG_DEBUG.
+#: src/protocol/http/http.c:187
 msgid "Enable on-the-fly compression"
 msgstr ""
 
-#: src/protocol/http/http.c:196
+#: src/protocol/http/http.c:189
 msgid ""
 "If enabled, the capability to receive compressed content (gzip and/or bzip2) "
 "is announced to the server, which usually sends the reply compressed, thus "
@@ -8000,11 +7997,11 @@ msgid ""
 "effect. To check the supported features, see Help -> About."
 msgstr ""
 
-#: src/protocol/http/http.c:209
+#: src/protocol/http/http.c:202
 msgid "Activate HTTP TRACE debugging"
 msgstr "Fehlersuche mit HTTP TRACE aktivieren"
 
-#: src/protocol/http/http.c:211
+#: src/protocol/http/http.c:204
 #, fuzzy
 msgid ""
 "If active, all HTTP requests are sent with TRACE as their method rather than "
@@ -8020,11 +8017,11 @@ msgstr ""
 "Anfrage nicht auf allen Servern angeschaltet sein muss."
 
 #. OSNews.com is supposed to be relying on the textmode token, at least.
-#: src/protocol/http/http.c:219
+#: src/protocol/http/http.c:212
 msgid "User-agent identification"
 msgstr "Benutzer-Programm Identifikation"
 
-#: src/protocol/http/http.c:221
+#: src/protocol/http/http.c:214
 #, fuzzy
 msgid ""
 "Change the User Agent ID. That means identification string, which is sent to "
@@ -8052,19 +8049,19 @@ msgstr ""
 "%t in der Zeichenkette ergibt die Größe des Terminals\n"
 "Benutze \" \", wenn keine Identifikation gesendet werden soll."
 
-#: src/protocol/http/http.c:238
+#: src/protocol/http/http.c:231
 msgid "HTTPS"
 msgstr "HTTPS"
 
-#: src/protocol/http/http.c:240
+#: src/protocol/http/http.c:233
 msgid "HTTPS-specific options."
 msgstr "HTTPS-spezifische Optionen."
 
-#: src/protocol/http/http.c:244
+#: src/protocol/http/http.c:237
 msgid "HTTPS proxy configuration."
 msgstr "HTTPS-Proxy-Konfiguration."
 
-#: src/protocol/http/http.c:248
+#: src/protocol/http/http.c:241
 #, fuzzy
 msgid ""
 "Host and port-number (host:port) of the HTTPS CONNECT proxy, or blank. If "
@@ -8407,10 +8404,6 @@ msgstr ""
 msgid "Scripting"
 msgstr "Skripte"
 
-#: src/scripting/smjs/action_object.c:86
-msgid "Cannot run actions in a tab that doesn't have the focus"
-msgstr ""
-
 #: src/scripting/smjs/elinks_object.c:86
 msgid "User script alert"
 msgstr ""
@@ -8421,12 +8414,12 @@ msgstr ""
 msgid "Spidermonkey ECMAScript"
 msgstr "Skripte"
 
-#: src/session/download.c:258 src/session/download.c:358
-#: src/session/download.c:696 src/session/download.c:799
+#: src/session/download.c:256 src/session/download.c:356
+#: src/session/download.c:587 src/session/download.c:675
 msgid "Download error"
 msgstr "Downloadfehler"
 
-#: src/session/download.c:259 src/session/download.c:800
+#: src/session/download.c:257 src/session/download.c:676
 #, c-format
 msgid ""
 "Could not create file '%s':\n"
@@ -8435,7 +8428,7 @@ msgstr ""
 "Konnte die Datei '%s' nicht anlegen:\n"
 "%s"
 
-#: src/session/download.c:359
+#: src/session/download.c:357
 #, c-format
 msgid ""
 "Error downloading %s:\n"
@@ -8446,16 +8439,16 @@ msgstr ""
 "\n"
 "%s"
 
-#: src/session/download.c:697
+#: src/session/download.c:588
 #, c-format
 msgid "'%s' is a directory."
 msgstr "'%s' ist ein Verzeichnis"
 
-#: src/session/download.c:726
+#: src/session/download.c:622
 msgid "File exists"
 msgstr "Datei existiert"
 
-#: src/session/download.c:727
+#: src/session/download.c:623
 #, c-format
 msgid ""
 "This file already exists:\n"
@@ -8471,54 +8464,54 @@ msgstr ""
 "%s"
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:734
+#: src/session/download.c:630
 #, fuzzy
 msgid "Sa~ve under the alternative name"
 msgstr "Speicher mit dem alternativen Namen"
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:735
+#: src/session/download.c:631
 #, fuzzy
 msgid "~Overwrite the original file"
 msgstr "Überschreibe die Originaldatei"
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:737
+#: src/session/download.c:632
 #, fuzzy
 msgid "~Resume download of the original file"
 msgstr "Nehme Download der Originaldatei wieder auf"
 
-#: src/session/download.c:1442
+#: src/session/download.c:1135
 msgid "Unknown type"
 msgstr "Unbekannter Typ"
 
-#: src/session/download.c:1467
+#: src/session/download.c:1160
 #, fuzzy, c-format
 msgid "What would you like to do with the file '%s' (type: %s%s%s)?"
 msgstr "Soll die Datei '%s' (Typ: %s) angezeigt werden?"
 
-#: src/session/download.c:1470
+#: src/session/download.c:1163
 #, fuzzy, c-format
 msgid "What would you like to do with the file (type: %s%s%s)?"
 msgstr "Soll die Datei '%s' (Typ: %s) angezeigt werden?"
 
-#: src/session/download.c:1498
+#: src/session/download.c:1191
 #, no-c-format
 msgid "Program ('%' will be replaced by the filename)"
 msgstr ""
 
-#: src/session/download.c:1502
+#: src/session/download.c:1195
 #, fuzzy
 msgid "Block the terminal"
 msgstr "Bildschirm blockieren"
 
-#: src/session/download.c:1508
+#: src/session/download.c:1201
 #, c-format
 msgid "The file will be opened with the program '%s'."
 msgstr ""
 
 #. accelerator_context(src/session/download.c:do_type_query)
-#: src/session/download.c:1529
+#: src/session/download.c:1222
 #, fuzzy
 msgid "~Open"
 msgstr "Öffnen"
@@ -8527,12 +8520,12 @@ msgstr "Öffnen"
 #. * and formatting it with "%u" is safe,
 #. * because fc_maxlength is smaller than
 #. * file.length, which is an int.
-#: src/session/session.c:771 src/session/session.c:790 src/session/task.c:275
+#: src/session/session.c:770 src/session/session.c:789 src/session/task.c:275
 #: src/viewer/text/textarea.c:641
 msgid "Warning"
 msgstr "Warnung"
 
-#: src/session/session.c:772
+#: src/session/session.c:771
 #, fuzzy
 msgid ""
 "You have an empty string in protocol.http.user_agent - this was a default "
@@ -8553,7 +8546,7 @@ msgstr ""
 "Voreinstellung benutzt wird. Entschuldigung für jegliche verursachten "
 "Unannehmlichkeiten."
 
-#: src/session/session.c:791
+#: src/session/session.c:790
 #, fuzzy
 msgid ""
 "You have option config.saving_style set to a de facto obsolete value. The "
@@ -8576,11 +8569,11 @@ msgstr ""
 "\" Verhalten zu erreichen. Entschuldigung für jegliche verursachten "
 "Unannehmlichkeiten."
 
-#: src/session/session.c:816
+#: src/session/session.c:815
 msgid "Welcome"
 msgstr "Willkommen"
 
-#: src/session/session.c:817
+#: src/session/session.c:816
 msgid ""
 "Welcome to ELinks!\n"
 "\n"
@@ -8649,7 +8642,7 @@ msgstr "Ungültiges Ereignis %d"
 msgid "Could not read event: %d (%s)"
 msgstr "Konnte Ereignis nicht lesen: %d (%s)"
 
-#: src/terminal/kbd.c:1214
+#: src/terminal/kbd.c:1210
 #, c-format
 msgid "Too many bytes read from the itrm!"
 msgstr ""
@@ -8696,17 +8689,17 @@ msgstr "Fehler beim Schreiben in Datei"
 msgid "Secure file saving error"
 msgstr "Fehler mit sicherer Datei"
 
-#: src/viewer/dump/dump.c:401
+#: src/viewer/dump/dump.c:87
 #, c-format
 msgid "Can't write to stdout: %s"
 msgstr ""
 
-#: src/viewer/dump/dump.c:404
+#: src/viewer/dump/dump.c:90
 #, fuzzy, c-format
 msgid "Can't write to stdout."
 msgstr "Fehler beim Schreiben in Datei"
 
-#: src/viewer/dump/dump.c:542
+#: src/viewer/dump/dump.c:286
 #, fuzzy, c-format
 msgid "URL protocol not supported (%s)."
 msgstr "Nicht unterstützte Remote-Methode"
@@ -8720,204 +8713,204 @@ msgstr "Fehlendes Fragment"
 msgid "The requested fragment \"%s\" doesn't exist."
 msgstr "Das angeforderte Fragment \\\"#%s\\\" existiert nicht."
 
-#: src/viewer/text/form.c:1115
+#: src/viewer/text/form.c:1118
 msgid "Error while posting form"
 msgstr "Fehler beim Senden des Formular"
 
-#: src/viewer/text/form.c:1116
+#: src/viewer/text/form.c:1119
 #, fuzzy, c-format
 msgid "Could not load file %s: %s"
 msgstr "Datei %s konnte nicht übertragen werden: %s"
 
-#: src/viewer/text/form.c:1873
+#: src/viewer/text/form.c:1876
 msgid "Reset form"
 msgstr "Formular zurücksetzen"
 
-#: src/viewer/text/form.c:1875
+#: src/viewer/text/form.c:1878
 #, fuzzy
 msgid "Harmless button"
 msgstr "Ausgewählte Schaltfläche"
 
-#: src/viewer/text/form.c:1883
+#: src/viewer/text/form.c:1886
 msgid "Submit form to"
 msgstr "Formular senden an"
 
-#: src/viewer/text/form.c:1884
+#: src/viewer/text/form.c:1887
 msgid "Post form to"
 msgstr "Formular senden an"
 
-#: src/viewer/text/form.c:1886
+#: src/viewer/text/form.c:1889
 msgid "Radio button"
 msgstr "Radiobutton"
 
-#: src/viewer/text/form.c:1890
+#: src/viewer/text/form.c:1893
 msgid "Select field"
 msgstr "Auswahlfeld"
 
-#: src/viewer/text/form.c:1894
+#: src/viewer/text/form.c:1897
 msgid "Text area"
 msgstr "Textbereich"
 
-#: src/viewer/text/form.c:1896
+#: src/viewer/text/form.c:1899
 msgid "File upload"
 msgstr "Datei heraufladen"
 
-#: src/viewer/text/form.c:1898
+#: src/viewer/text/form.c:1901
 msgid "Password field"
 msgstr "Passwortfeld"
 
-#: src/viewer/text/form.c:1936
+#: src/viewer/text/form.c:1939
 msgid "name"
 msgstr "Name"
 
-#: src/viewer/text/form.c:1948
+#: src/viewer/text/form.c:1951
 msgid "value"
 msgstr "Wert"
 
-#: src/viewer/text/form.c:1961
+#: src/viewer/text/form.c:1964
 msgid "read only"
 msgstr "Nur Lesen"
 
-#: src/viewer/text/form.c:1972
+#: src/viewer/text/form.c:1975
 #, c-format
 msgid "press %s to navigate"
 msgstr "Drücken Sie %s, um zu navigieren"
 
-#: src/viewer/text/form.c:1974
+#: src/viewer/text/form.c:1977
 #, c-format
 msgid "press %s to edit"
 msgstr "Drücken Sie %s, um zu editieren"
 
-#: src/viewer/text/form.c:2010
+#: src/viewer/text/form.c:2013
 #, fuzzy, c-format
 msgid "press %s to submit to %s"
 msgstr "Drücken Sie %s, um das Formular abzuschicken (Methode GET)"
 
-#: src/viewer/text/form.c:2012
+#: src/viewer/text/form.c:2015
 #, fuzzy, c-format
 msgid "press %s to post to %s"
 msgstr "Drücken Sie %s, um das Formular abzuschicken (Methode POST)"
 
-#: src/viewer/text/form.c:2114
+#: src/viewer/text/form.c:2117
 #, fuzzy
 msgid "Useless button"
 msgstr "Ausgewählte Schaltfläche"
 
-#: src/viewer/text/form.c:2116
+#: src/viewer/text/form.c:2119
 #, fuzzy
 msgid "Submit button"
 msgstr "Formular senden an"
 
 #. accelerator_context(link_menu.map)
-#: src/viewer/text/link.c:1288
+#: src/viewer/text/link.c:1280
 msgid "Display ~usemap"
 msgstr "~Usemap anzeigen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1293
+#: src/viewer/text/link.c:1285
 msgid "~Follow link"
 msgstr "~Link folgen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1295
+#: src/viewer/text/link.c:1287
 msgid "Follow link and r~eload"
 msgstr "Link ~folgen und neu laden"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1299
+#: src/viewer/text/link.c:1291
 msgid "Open in new ~window"
 msgstr "~In neuem Fenster öffnen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1301
+#: src/viewer/text/link.c:1293
 msgid "Open in new ~tab"
 msgstr "In neuer Ansich~t öffnen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1303
+#: src/viewer/text/link.c:1295
 msgid "Open in new tab in ~background"
 msgstr "In neuer Ansicht im ~Hintergrund öffnen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1308
+#: src/viewer/text/link.c:1300
 msgid "~Download link"
 msgstr "Link ~herunterladen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1311
+#: src/viewer/text/link.c:1303
 msgid "~Add link to bookmarks"
 msgstr "Link zu Lese~zeichen hinzufügen"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1315
+#: src/viewer/text/link.c:1307
 msgid "Pass link URI to e~xternal command"
 msgstr "Delegiere Link-URI an e~xternes Programm"
 
 #. accelerator_context(link_menu.form, link_menu.reset, link_menu.textarea)
-#: src/viewer/text/link.c:1326 src/viewer/text/link.c:1366
+#: src/viewer/text/link.c:1318 src/viewer/text/link.c:1358
 msgid "~Reset form"
 msgstr "Formula~r löschen"
 
 #. accelerator_context(link_menu.textarea)
-#: src/viewer/text/link.c:1341
+#: src/viewer/text/link.c:1333
 msgid "Open in ~external editor"
 msgstr "In externen Editor öffnen"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1349
+#: src/viewer/text/link.c:1341
 msgid "~Submit form"
 msgstr "Formular ~senden"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1350
+#: src/viewer/text/link.c:1342
 msgid "Submit form and rel~oad"
 msgstr "Formular senden und neu laden"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1354
+#: src/viewer/text/link.c:1346
 msgid "Submit form and open in new ~window"
 msgstr "Formular senden und in neuem Fenster öffnen"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1356
+#: src/viewer/text/link.c:1348
 msgid "Submit form and open in new ~tab"
 msgstr "Formular senden und in neuer Ansich~t öffnen"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1359
+#: src/viewer/text/link.c:1351
 msgid "Submit form and open in new tab in ~background"
 msgstr "Formular senden und in neuer Ansicht im ~Hintergrund öffnen"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1364
+#: src/viewer/text/link.c:1356
 msgid "Submit form and ~download"
 msgstr "Formular sen~den und herunterladen"
 
 #. accelerator_context(link_menu.form, link_menu.reset, link_menu.textarea)
-#: src/viewer/text/link.c:1371
+#: src/viewer/text/link.c:1363
 #, fuzzy
 msgid "Form f~ields"
 msgstr "Passwortfeld"
 
 #. accelerator_context(link_menu.form, link_menu.map, link_menu.std)
-#: src/viewer/text/link.c:1378
+#: src/viewer/text/link.c:1370
 msgid "V~iew image"
 msgstr "B~ild anzeigen"
 
 #. accelerator_context(link_menu.form, link_menu.map, link_menu.std)
-#: src/viewer/text/link.c:1380
+#: src/viewer/text/link.c:1372
 msgid "Download ima~ge"
 msgstr "Bild herunterladen"
 
-#: src/viewer/text/link.c:1389
+#: src/viewer/text/link.c:1381
 msgid "No link selected"
 msgstr "Kein Link ausgewählt"
 
-#: src/viewer/text/link.c:1461
+#: src/viewer/text/link.c:1451
 msgid "Image"
 msgstr "Bild"
 
-#: src/viewer/text/link.c:1466
+#: src/viewer/text/link.c:1456
 msgid "Usemap"
 msgstr "Usemap"
 
@@ -8926,72 +8919,72 @@ msgstr "Usemap"
 msgid "Marks"
 msgstr ""
 
-#: src/viewer/text/search.c:1105
+#: src/viewer/text/search.c:1099
 msgid "Search hit top, continuing at bottom."
 msgstr "Am Anfang angekommen, führe die Suche am Ende fort."
 
-#: src/viewer/text/search.c:1106
+#: src/viewer/text/search.c:1100
 msgid "Search hit bottom, continuing at top."
 msgstr "Am Ende angekommen, führe die Suche am Anfang fort."
 
-#: src/viewer/text/search.c:1109
+#: src/viewer/text/search.c:1103
 msgid "No previous search"
 msgstr "es wurde noch keine Suche durchgeführt"
 
-#: src/viewer/text/search.c:1121
+#: src/viewer/text/search.c:1115
 #, fuzzy, c-format
 msgid "Could not compile regular expression '%s'"
 msgstr "Reguläre Ausdrücke"
 
-#: src/viewer/text/search.c:1165
+#: src/viewer/text/search.c:1159
 #, c-format
 msgid "No further matches for '%s'."
 msgstr ""
 
-#: src/viewer/text/search.c:1167
+#: src/viewer/text/search.c:1161
 #, c-format
 msgid "Could not find a link with the text '%s'."
 msgstr "Konnte keinen Link mit dem Text '%s' finden."
 
-#: src/viewer/text/search.c:1169 src/viewer/text/search.c:1582
+#: src/viewer/text/search.c:1163 src/viewer/text/search.c:1576
 msgid "Typeahead"
 msgstr "Zeichenweise"
 
-#: src/viewer/text/search.c:1584
+#: src/viewer/text/search.c:1578
 #, c-format
 msgid "No links in current document"
 msgstr "Keine Links im aktuellen Dokument"
 
-#: src/viewer/text/search.c:1667
+#: src/viewer/text/search.c:1661
 msgid "Search for text"
 msgstr "Textsuche"
 
-#: src/viewer/text/search.c:1703
+#: src/viewer/text/search.c:1697
 msgid "Normal search"
 msgstr "Normale Suche"
 
-#: src/viewer/text/search.c:1704
+#: src/viewer/text/search.c:1698
 msgid "Regexp search"
 msgstr "Suche mit regulären Ausdrücken"
 
-#: src/viewer/text/search.c:1705
+#: src/viewer/text/search.c:1699
 msgid "Extended regexp search"
 msgstr "Suche mit erweiterten regulären Ausdrücken"
 
-#: src/viewer/text/search.c:1707
+#: src/viewer/text/search.c:1701
 msgid "Case sensitive"
 msgstr "Groß-/Kleinschreibung beachten"
 
-#: src/viewer/text/search.c:1708
+#: src/viewer/text/search.c:1702
 msgid "Case insensitive"
 msgstr "Groß-/Kleinschreibung ignorieren"
 
-#: src/viewer/text/search.c:1732
+#: src/viewer/text/search.c:1726
 msgid "Search backward"
 msgstr "Suche rückwärts"
 
 #. name:
-#: src/viewer/text/search.c:1771
+#: src/viewer/text/search.c:1765
 #, fuzzy
 msgid "Search History"
 msgstr "Suchen in Verlauf"
@@ -9023,11 +9016,11 @@ msgstr "Link öffnen"
 msgid "Enter link number"
 msgstr "Linknummer eingeben"
 
-#: src/viewer/text/view.c:1631
+#: src/viewer/text/view.c:1628
 msgid "Save error"
 msgstr "Fehler beim Speichern"
 
-#: src/viewer/text/view.c:1632
+#: src/viewer/text/view.c:1629
 msgid "Error writing to file"
 msgstr "Fehler beim Schreiben in Datei"
 

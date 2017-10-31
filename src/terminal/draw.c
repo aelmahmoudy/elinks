@@ -7,6 +7,7 @@
 
 #include "elinks.h"
 
+#include "bfu/dialog.h"
 #include "config/options.h"
 #include "intl/charsets.h"
 #include "terminal/color.h"
@@ -25,10 +26,10 @@
 
 #if SCREEN_COLOR_SIZE > 1
 #define clear_screen_char_color(schar) \
-	do { memset((schar)->color, 0, SCREEN_COLOR_SIZE); } while (0)
+	do { memset((schar)->c.color, 0, SCREEN_COLOR_SIZE); } while (0)
 #else
 #define clear_screen_char_color(schar) \
-	do { (schar)->color[0] = 0; } while (0)
+	do { (schar)->c.color[0] = 0; } while (0)
 #endif
 
 
@@ -75,7 +76,7 @@ draw_border_cross(struct terminal *term, int x, int y,
 	}
 
 	set_term_color(screen_char, color, 0,
-		       get_opt_int_tree(term->spec, "colors"));
+		       get_opt_int_tree(term->spec, "colors", NULL));
 }
 
 void
@@ -89,7 +90,7 @@ draw_border_char(struct terminal *term, int x, int y,
 	screen_char->data = (unsigned char) border;
 	screen_char->attr = SCREEN_ATTR_FRAME;
 	set_term_color(screen_char, color, 0,
-		       get_opt_int_tree(term->spec, "colors"));
+		       get_opt_int_tree(term->spec, "colors", NULL));
 	set_screen_dirty(term->screen, y, y);
 }
 
@@ -101,7 +102,7 @@ draw_char_color(struct terminal *term, int x, int y, struct color_pair *color)
 	if (!screen_char) return;
 
 	set_term_color(screen_char, color, 0,
-		       get_opt_int_tree(term->spec, "colors"));
+		       get_opt_int_tree(term->spec, "colors", NULL));
 	set_screen_dirty(term->screen, y, y);
 }
 
@@ -138,6 +139,17 @@ draw_char_data(struct terminal *term, int x, int y, unsigned char data)
 #endif /* CONFIG_UTF8 */
 
 	set_screen_dirty(term->screen, y, y);
+}
+
+void
+draw_space(struct terminal *term, int x, int y, struct screen_char *color)
+{
+	struct screen_char *screen_char = get_char(term, x, y);
+
+	if (!screen_char) return;
+
+	screen_char->data = ' ';
+	if (color) screen_char->c = color->c;
 }
 
 /*! Used by viewer to copy over a document.
@@ -351,7 +363,7 @@ draw_char(struct terminal *term, int x, int y,
 	screen_char->data = data;
 	screen_char->attr = attr;
 	set_term_color(screen_char, color, 0,
-		       get_opt_int_tree(term->spec, "colors"));
+		       get_opt_int_tree(term->spec, "colors", NULL));
 
 	set_screen_dirty(term->screen, y, y);
 }
@@ -378,7 +390,7 @@ draw_box(struct terminal *term, struct box *box,
 	end->data = data;
 	if (color) {
 		set_term_color(end, color, 0,
-			       get_opt_int_tree(term->spec, "colors"));
+			       get_opt_int_tree(term->spec, "colors", NULL));
 	} else {
 		clear_screen_char_color(end);
 	}
@@ -440,7 +452,7 @@ draw_text_utf8(struct terminal *term, int x, int y,
 	if (color) {
 		start->attr = attr;
 		set_term_color(start, color, 0,
-			       get_opt_int_tree(term->spec, "colors"));
+			       get_opt_int_tree(term->spec, "colors", NULL));
 	}
 
 	if (start->data == UCS_NO_CHAR && x - 1 > 0)
@@ -540,7 +552,7 @@ draw_text(struct terminal *term, int x, int y,
 		/* Use the last char as template. */
 		end->attr = attr;
 		set_term_color(end, color, 0,
-			       get_opt_int_tree(term->spec, "colors"));
+			       get_opt_int_tree(term->spec, "colors", NULL));
 
 		for (; pos < end && *text; text++, pos++) {
 			end->data = *text;
@@ -559,12 +571,30 @@ draw_text(struct terminal *term, int x, int y,
 }
 
 void
+draw_dlg_text(struct dialog_data *dlg_data, int x, int y,
+	  unsigned char *text, int length,
+	  enum screen_char_attr attr, struct color_pair *color)
+{
+	struct terminal *term = dlg_data->win->term;
+	struct box *box = &dlg_data->real_box;
+
+	if (box->height) {
+		int y_max = box->y + box->height;
+
+		y -= dlg_data->y;
+		if (y < box->y || y >= y_max) return;
+	}
+	draw_text(term, x, y, text, length, attr, color);
+}
+
+
+void
 set_cursor(struct terminal *term, int x, int y, int blockable)
 {
 	assert(term && term->screen);
 	if_assert_failed return;
 
-	if (blockable && get_opt_bool_tree(term->spec, "block_cursor")) {
+	if (blockable && get_opt_bool_tree(term->spec, "block_cursor", NULL)) {
 		x = term->width - 1;
 		y = term->height - 1;
 	}
@@ -578,6 +608,24 @@ set_cursor(struct terminal *term, int x, int y, int blockable)
 		term->screen->cy = y;
 	}
 }
+
+void
+set_dlg_cursor(struct terminal *term, struct dialog_data *dlg_data, int x, int y, int blockable)
+{
+	struct box *box = &dlg_data->real_box;
+
+	assert(term && term->screen);
+	if_assert_failed return;
+
+	if (box->height) {
+		int y_max = box->y + box->height;
+
+		y -= dlg_data->y;
+		if (y < box->y || y >= y_max) return;
+	}
+	set_cursor(term, x, y, blockable);
+}
+
 
 void
 clear_terminal(struct terminal *term)

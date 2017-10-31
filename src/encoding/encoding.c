@@ -45,27 +45,14 @@ dummy_open(struct stream_encoded *stream, int fd)
 	return 0;
 }
 
-/*! @return A positive number means that many bytes were
- * written to the @a data array.  Otherwise, the value is
- * enum read_encoded_result.  */
 static int
 dummy_read(struct stream_encoded *stream, unsigned char *data, int len)
 {
-	struct dummy_enc_data *const enc = stream->data;
-	int got = safe_read(enc->fd, data, len);
-
-	if (got > 0)
-		return got;
-	else if (got == 0)
-		return READENC_STREAM_END;
-	else if (errno == EAGAIN)
-		return READENC_EAGAIN;
-	else
-		return READENC_ERRNO;
+	return safe_read(((struct dummy_enc_data *) stream->data)->fd, data, len);
 }
 
 static unsigned char *
-dummy_decode_buffer(unsigned char *data, int len, int *new_len)
+dummy_decode_buffer(struct stream_encoded *stream, unsigned char *data, int len, int *new_len)
 {
 	unsigned char *buffer = memacpy(data, len);
 
@@ -96,6 +83,7 @@ static const struct decoding_backend dummy_decoding_backend = {
 
 /* Dynamic backend area */
 
+#include "encoding/brotli.h"
 #include "encoding/bzip2.h"
 #include "encoding/deflate.h"
 #include "encoding/lzma.h"
@@ -106,6 +94,7 @@ static const struct decoding_backend *const decoding_backends[] = {
 	&bzip2_decoding_backend,
 	&lzma_decoding_backend,
 	&deflate_decoding_backend,
+	&brotli_decoding_backend,
 };
 
 
@@ -131,13 +120,9 @@ open_encoded(int fd, enum stream_encoding encoding)
 	return NULL;
 }
 
-/** Read available data from stream and decode them. Note that when
- * data change their size during decoding, @a len indicates desired
- * size of _returned_ data, not desired size of data read from
- * stream.
- *
- * @return A positive number means that many bytes were written to the
- * @a data array.  Otherwise, the value is enum read_encoded_result.  */
+/* Read available data from stream and decode them. Note that when data change
+ * their size during decoding, 'len' indicates desired size of _returned_ data,
+ * not desired size of data read from stream. */
 int
 read_encoded(struct stream_encoded *stream, unsigned char *data, int len)
 {
@@ -148,10 +133,10 @@ read_encoded(struct stream_encoded *stream, unsigned char *data, int len)
  * for parts of files. @data contains the original data, @len bytes
  * long. The resulting decoded data chunk is *@new_len bytes long. */
 unsigned char *
-decode_encoded_buffer(enum stream_encoding encoding, unsigned char *data, int len,
+decode_encoded_buffer(struct stream_encoded *stream, enum stream_encoding encoding, unsigned char *data, int len,
 		      int *new_len)
 {
-	return decoding_backends[encoding]->decode_buffer(data, len, new_len);
+	return decoding_backends[encoding]->decode_buffer(stream, data, len, new_len);
 }
 
 /* Closes encoded stream. Note that fd associated with the stream will be
@@ -243,9 +228,6 @@ try_encoding_extensions(struct string *filename, int *fd)
 struct connection_state
 read_file(struct stream_encoded *stream, int readsize, struct string *page)
 {
-	int readlen;
-	int save_errno;
-
 	if (!init_string(page)) return connection_state(S_OUT_OF_MEM);
 
 	/* We read with granularity of stt.st_size (given as @readsize) - this
@@ -257,55 +239,46 @@ read_file(struct stream_encoded *stream, int readsize, struct string *page)
 	 * allocate zero number of bytes. */
 	if (!readsize) readsize = 4096;
 
-	for (;;) {
-		unsigned char *string_pos;
-		
-		if (!realloc_string(page, page->length + readsize)) {
+	while (realloc_string(page, page->length + readsize)) {
+		unsigned char *string_pos = page->source + page->length;
+		int readlen = read_encoded(stream, string_pos, readsize);
+
+		if (readlen < 0) {
 			done_string(page);
-			return connection_state(S_OUT_OF_MEM);
-		}
-		
-		string_pos = page->source + page->length;
-		readlen = read_encoded(stream, string_pos, readsize);
-		if (readlen <= 0) {
-			save_errno = errno; /* in case of READENC_ERRNO */
-			break;
+
+			/* If it is some I/O error (and errno is set) that will
+			 * do. Since errno == 0 == S_WAIT and we cannot have
+			 * that. */
+			if (errno)
+				return connection_state_for_errno(errno);
+
+			/* FIXME: This is indeed an internal error. If readed from a
+			 * corrupted encoded file nothing or only some of the
+			 * data will be read. */
+			return connection_state(S_ENCODE_ERROR);
+
+		} else if (readlen == 0) {
+			/* NUL-terminate just in case */
+			page->source[page->length] = '\0';
+			return connection_state(S_OK);
 		}
 
 		page->length += readlen;
+#if 0
+		/* This didn't work so well as it should (I had to implement
+		 * end of stream handling to bzip2 anyway), so I rather
+		 * disabled this. */
+		if (readlen < readsize) {
+			/* This is much safer. It should always mean that we
+			 * already read everything possible, and it permits us
+			 * more elegant of handling end of file with bzip2. */
+			break;
+		}
+#endif
 	}
 
-	switch (readlen) {
-	case READENC_ERRNO:
-		done_string(page);
-		return connection_state_for_errno(save_errno);
-
-	case READENC_STREAM_END:
-		/* NUL-terminate just in case */
-		page->source[page->length] = '\0';
-		return connection_state(S_OK);
-
-	case READENC_UNEXPECTED_EOF:
-	case READENC_DATA_ERROR:
-		done_string(page);
-		/* FIXME: This is indeed an internal error. If readed from a
-		 * corrupted encoded file nothing or only some of the
-		 * data will be read. */
-		return connection_state(S_ENCODE_ERROR);
-
-	case READENC_MEM_ERROR:
-		done_string(page);
-		return connection_state(S_OUT_OF_MEM);
-
-	case READENC_EAGAIN:
-	case READENC_INTERNAL:
-	default:
-		ERROR("unexpected readlen==%d", readlen);
-		/* If you have a breakpoint in elinks_error(),
-		 * you can examine page before it gets freed.  */
-		done_string(page);
-		return connection_state(S_INTERNAL);
-	}
+	done_string(page);
+	return connection_state(S_OUT_OF_MEM);
 }
 
 static inline int
@@ -329,7 +302,7 @@ read_encoded_file(struct string *filename, struct string *page)
 	int fd = open(filename->source, O_RDONLY | O_NOCTTY);
 	struct connection_state state = connection_state_for_errno(errno);
 
-	if (fd == -1 && get_opt_bool("protocol.file.try_encoding_extensions")) {
+	if (fd == -1 && get_opt_bool("protocol.file.try_encoding_extensions", NULL)) {
 		encoding = try_encoding_extensions(filename, &fd);
 
 	} else if (fd != -1) {
@@ -359,7 +332,7 @@ read_encoded_file(struct string *filename, struct string *page)
 		/* Leave @state being the saved errno */
 
 	} else if (!S_ISREG(stt.st_mode) && !is_stdin_pipe(&stt, filename)
-	           && !get_opt_bool("protocol.file.allow_special_files")) {
+	           && !get_opt_bool("protocol.file.allow_special_files", NULL)) {
 		state = connection_state(S_FILE_TYPE);
 
 	} else if (!(stream = open_encoded(fd, encoding))) {

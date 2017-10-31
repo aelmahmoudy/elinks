@@ -119,6 +119,7 @@ get_content_type_default(unsigned char *extension)
 	if (extend < extension)	return NULL;
 
 	opt_tree = get_opt_rec_real(config_options, "mime.extension");
+	assert(opt_tree);
 
 	foreach (opt, *opt_tree->value.tree) {
 		unsigned char *namepos = opt->name + strlen(opt->name) - 1;
@@ -159,7 +160,7 @@ get_mime_type_option(unsigned char *type)
 
 	if (add_optname_to_string(&name, type, strlen(type))) {
 		/* Search for end of the base type. */
-		unsigned char *pos = strchr(name.source, '/');
+		unsigned char *pos = strchr((const char *)name.source, '/');
 
 		if (pos) {
 			*pos = '.';
@@ -201,11 +202,11 @@ get_mime_handler_default(unsigned char *type, int have_x)
 	handler_opt = get_mime_handler_option(type_opt, have_x);
 	if (!handler_opt) return NULL;
 
-	return init_mime_handler(get_opt_str_tree(handler_opt, "program"),
+	return init_mime_handler(get_opt_str_tree(handler_opt, "program", NULL),
 				 type_opt->value.string,
 				 default_mime_module.name,
-				 get_opt_bool_tree(handler_opt, "ask"),
-				 get_opt_bool_tree(handler_opt, "block"));
+				 get_opt_bool_tree(handler_opt, "ask", NULL),
+				 get_opt_bool_tree(handler_opt, "block", NULL));
 }
 
 

@@ -1,6 +1,8 @@
 #ifndef EL__INTL_CHARSETS_H
 #define EL__INTL_CHARSETS_H
 
+struct hash;
+
 /* The TRE check in configure.in assumes unicode_val_T is uint32_t.  */
 typedef uint32_t unicode_val_T;
 
@@ -26,6 +28,15 @@ typedef uint32_t unicode_val_T;
  * this if the input is too short.  This is also used as a placeholder
  * for the second cell of a double-cell character.  */
 #define UCS_NO_CHAR ((unicode_val_T) 0xFFFFFFFD)
+
+#ifdef CONFIG_COMBINE
+#define UCS_END_COMBINED ((unicode_val_T) 0xFFFFFFFC)
+
+#define UCS_BEGIN_COMBINED ((unicode_val_T) (UCS_END_COMBINED - (unicode_val_T) 10000))
+
+/* Base character and up to 5 combining characters. */
+#define UCS_MAX_LENGTH_COMBINED 6
+#endif /* CONFIG_COMBINE */
 
 /* If ELinks should display a double-cell character but there is only
  * one cell available, it displays this character instead.  This must
@@ -63,6 +74,7 @@ struct conv_table {
 		 * table owns the nested conversion table.  */
 		struct conv_table *tbl;
 	} u;
+	int iconv_cp;
 };
 
 enum convert_string_mode {
@@ -112,6 +124,8 @@ int get_cp_index(const unsigned char *);
 unsigned char *get_cp_name(int);
 unsigned char *get_cp_config_name(int);
 unsigned char *get_cp_mime_name(int);
+const uint16_t *get_cp_highhalf(const unsigned char *);
+
 int is_cp_utf8(int);
 void free_conv_table(void);
 unsigned char *encode_utf8(unicode_val_T);
@@ -148,6 +162,14 @@ int strlen_utf8(unsigned char **);
 #endif /* CONFIG_UTF8 */
 unicode_val_T utf8_to_unicode(unsigned char **, const unsigned char *);
 unicode_val_T cp_to_unicode(int, unsigned char **, const unsigned char *);
+
+#ifdef CONFIG_COMBINE
+extern unicode_val_T last_combined;
+extern unicode_val_T **combined;
+extern struct hash *combined_hash;
+unicode_val_T get_combined(unicode_val_T *, int);
+void free_combined();
+#endif /* CONFIG_COMBINE */
 
 unicode_val_T cp2u(int, unsigned char);
 const unsigned char *cp2utf8(int, int);

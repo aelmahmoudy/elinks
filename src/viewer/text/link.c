@@ -16,7 +16,6 @@
 #include "dialogs/status.h"
 #include "document/document.h"
 #include "document/forms.h"
-#include "document/html/parser.h"
 #include "document/html/renderer.h"
 #include "document/options.h"
 #include "document/view.h"
@@ -69,7 +68,7 @@ current_link_evhook(struct document_view *doc_view, enum script_event_hook_type 
 
 		if (evhook->type != type) continue;
 		ret = evhook->src;
-		while ((ret = strstr(ret, "return ")))
+		while ((ret = strstr((const char *)ret, "return ")))
 			while (*ret != ' ') *ret++ = ' ';
 		{
 			struct string src = INIT_STRING(evhook->src, strlen(evhook->src));
@@ -170,12 +169,12 @@ static inline struct screen_char *
 init_link_drawing(struct document_view *doc_view, struct link *link, int invert)
 {
 	struct document_options *doc_opts;
-	static struct screen_char template;
+	static struct screen_char template_;
 	enum color_flags color_flags;
 	enum color_mode color_mode;
 	struct color_pair colors;
 
-	template.attr = SCREEN_ATTR_STANDOUT;
+	template_.attr = SCREEN_ATTR_STANDOUT;
 
 	doc_opts = &doc_view->document->options;
 
@@ -183,14 +182,14 @@ init_link_drawing(struct document_view *doc_view, struct link *link, int invert)
 	color_mode = doc_opts->color_mode;
 
 	if (doc_opts->active_link.underline)
-		template.attr |= SCREEN_ATTR_UNDERLINE;
+		template_.attr |= SCREEN_ATTR_UNDERLINE;
 
 	if (doc_opts->active_link.bold)
-		template.attr |= SCREEN_ATTR_BOLD;
+		template_.attr |= SCREEN_ATTR_BOLD;
 
-	if (doc_opts->active_link.color) {
-		colors.foreground = doc_opts->active_link.fg;
-		colors.background = doc_opts->active_link.bg;
+	if (doc_opts->active_link.enable_color) {
+		colors.foreground = doc_opts->active_link.color.foreground;
+		colors.background = doc_opts->active_link.color.background;
 	} else {
 		colors.foreground = link->color.foreground;
 		colors.background = link->color.background;
@@ -219,9 +218,9 @@ init_link_drawing(struct document_view *doc_view, struct link *link, int invert)
 		}
 	}
 
-	set_term_color(&template, &colors, color_flags, color_mode);
+	set_term_color(&template_, &colors, color_flags, color_mode);
 
-	return &template;
+	return &template_;
 }
 
 /** Give the current link the appropriate colour and attributes. */
@@ -229,7 +228,7 @@ void
 draw_current_link(struct session *ses, struct document_view *doc_view)
 {
 	struct terminal *term = ses->tab->term;
-	struct screen_char *template;
+	struct screen_char *template_;
 	struct link *link;
 	int cursor_offset;
 	int xpos, ypos;
@@ -245,8 +244,8 @@ draw_current_link(struct session *ses, struct document_view *doc_view)
 	if (!link) return;
 
 	i = !link_is_textinput(link) || ses->insert_mode == INSERT_MODE_OFF;
-	template = init_link_drawing(doc_view, link, i);
-	if (!template) return;
+	template_ = init_link_drawing(doc_view, link, i);
+	if (!template_) return;
 
 	xpos = doc_view->box.x - doc_view->vs->x;
 	ypos = doc_view->box.y - doc_view->vs->y;
@@ -273,14 +272,14 @@ draw_current_link(struct session *ses, struct document_view *doc_view)
 
 		if (i == cursor_offset) {
 			int blockable = (!link_is_textinput(link)
-					 && co->color != template->color);
+					 && co->c.color != template_->c.color);
 
 			set_cursor(term, x, y, blockable);
 			set_window_ptr(ses->tab, x, y);
 		}
 
- 		template->data = co->data;
- 		copy_screen_chars(co, template, 1);
+ 		template_->data = co->data;
+ 		copy_screen_chars(co, template_, 1);
 		set_screen_dirty(term->screen, y, y);
 	}
 
@@ -954,16 +953,12 @@ call_onsubmit_and_submit(struct session *ses, struct document_view *doc_view,
 }
 
 struct link *
-goto_current_link(struct session *ses, struct document_view *doc_view, int do_reload)
+goto_link(struct session *ses, struct document_view *doc_view, struct link *link, int do_reload)
 {
-	struct link *link;
 	struct uri *uri;
 
-	assert(doc_view && ses);
+	assert(link && doc_view && ses);
 	if_assert_failed return NULL;
-
-	link = get_current_link(doc_view);
-	if (!link) return NULL;
 
 	if (link_is_form(link)) {
 		struct form_control *fc = link->data.form_control;
@@ -980,7 +975,7 @@ goto_current_link(struct session *ses, struct document_view *doc_view, int do_re
 
 	if (link->type == LINK_MAP) {
 		/* TODO: Test reload? */
-		goto_imgmap(ses, uri, null_or_stracpy(link->target));
+		goto_imgmap(ses, uri, link->target);
 
 	} else {
 		enum cache_mode mode = do_reload ? CACHE_MODE_FORCE_RELOAD
@@ -993,6 +988,20 @@ goto_current_link(struct session *ses, struct document_view *doc_view, int do_re
 	return link;
 }
 
+struct link *
+goto_current_link(struct session *ses, struct document_view *doc_view, int do_reload)
+{
+	struct link *link;
+
+	assert(doc_view && ses);
+	if_assert_failed return NULL;
+
+	link = get_current_link(doc_view);
+	if (!link) return NULL;
+
+	return goto_link(ses, doc_view, link, do_reload);
+}
+
 static enum frame_event_status
 activate_link(struct session *ses, struct document_view *doc_view,
               struct link *link, int do_reload)
@@ -1002,12 +1011,13 @@ activate_link(struct session *ses, struct document_view *doc_view,
 	struct form *form;
 
 	switch (link->type) {
+	case LINK_BUTTON:
+		do_reload = 1;
 	case LINK_HYPERTEXT:
 	case LINK_MAP:
 	case LINK_FIELD:
 	case LINK_AREA:
-	case LINK_BUTTON:
-		if (goto_current_link(ses, doc_view, do_reload))
+		if (goto_link(ses, doc_view, link, do_reload))
 			return FRAME_EVENT_OK;
 		break;
 	case LINK_CHECKBOX:
@@ -1083,6 +1093,11 @@ enter(struct session *ses, struct document_view *doc_view, int do_reload)
 	link = get_current_link(doc_view);
 	if (!link) return FRAME_EVENT_REFRESH;
 
+	if (link_is_textinput(link)
+	    && ses->insert_mode == INSERT_MODE_OFF) {
+		ses->insert_mode = INSERT_MODE_ON;
+		return FRAME_EVENT_REFRESH;
+	}
 
 	if (!current_link_evhook(doc_view, SEVHOOK_ONCLICK))
 		return FRAME_EVENT_REFRESH;
@@ -1185,7 +1200,7 @@ goto_link_number_do(struct session *ses, struct document_view *doc_view, int n)
 
 	link = &doc_view->document->links[n];
 	if (!link_is_textinput(link)
-	    && get_opt_bool("document.browse.accesskey.auto_follow"))
+	    && get_opt_bool("document.browse.accesskey.auto_follow", ses))
 		enter(ses, doc_view, 0);
 }
 
@@ -1200,6 +1215,23 @@ goto_link_number(struct session *ses, unsigned char *num)
 	assert(doc_view);
 	if_assert_failed return;
 	goto_link_number_do(ses, doc_view, atoi(num) - 1);
+}
+
+void
+goto_link_symbol(struct session *ses, unsigned char *sym)
+{
+	char *symkey = get_opt_str("document.browse.links.label_key", ses);
+	struct document_view *doc_view;
+	int num;
+	int base = strlen(symkey);
+
+	assert(ses && sym);
+	if_assert_failed return;
+	doc_view = current_frame(ses);
+	assert(doc_view);
+	if_assert_failed return;
+	num = qwerty2dec(sym, symkey, base);
+	goto_link_number_do(ses, doc_view, num - 1);
 }
 
 /** See if this document is interested in the key user pressed. */
@@ -1239,7 +1271,7 @@ try_document_key(struct session *ses, struct document_view *doc_view,
 		struct link *link = &doc_view->document->links[i];
 
 		if (key == link->accesskey) {
-			ses->kbdprefix.repeat_count = 0;
+			set_kbd_repeat_count(ses, 0);
 			goto_link_number_do(ses, doc_view, i);
 			return FRAME_EVENT_REFRESH;
 		}
@@ -1248,7 +1280,7 @@ try_document_key(struct session *ses, struct document_view *doc_view,
 		struct link *link = &doc_view->document->links[i];
 
 		if (key == link->accesskey) {
-			ses->kbdprefix.repeat_count = 0;
+			set_kbd_repeat_count(ses, 0);
 			goto_link_number_do(ses, doc_view, i);
 			return FRAME_EVENT_REFRESH;
 		}
@@ -1293,6 +1325,8 @@ link_menu(struct terminal *term, void *xxx, void *ses_)
 			add_menu_action(&mi, N_("~Follow link"), ACT_MAIN_LINK_FOLLOW);
 
 			add_menu_action(&mi, N_("Follow link and r~eload"), ACT_MAIN_LINK_FOLLOW_RELOAD);
+
+			add_menu_action(&mi, N_("~Link info"), ACT_MAIN_LINK_INFO);
 
 			add_menu_separator(&mi);
 
@@ -1470,7 +1504,8 @@ get_current_link_info(struct session *ses, struct document_view *doc_view)
 		/* Add the uri with password and post info stripped */
 		add_string_uri_to_string(&str, uristring, URI_PUBLIC);
 		if (link->accesskey > 0
-		    && get_opt_bool("document.browse.accesskey.display")) {
+		    && get_opt_bool("document.browse.accesskey.display",
+		                    ses)) {
 			add_to_string(&str, " (");
 			add_accesskey_to_string(&str, link->accesskey);
 			add_char_to_string(&str, ')');

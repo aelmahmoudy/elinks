@@ -48,13 +48,14 @@ zlib 1.2.0.2 or later	|For handling gzip or deflate compressed documents   \
 bzip2			|Likewise, for bzip2 compressed documents.
 LZMA Utils		|Likewise, for LZMA compressed documents.            \
 			 Version 4.32.5 should work.  XZ Utils does not work.
-OpenSSL or GNU TLS	|For handling secure HTTP browsing.
+OpenSSL, GNU TLS, or nss_compat_ossl \
+			|For handling secure HTTP browsing.
 pkg-config		|Needed for locating some libraries (at least	    \
-			 GNU TLS and TRE)
+			 GNU TLS, TRE, and SpiderMonkey)
 GPM			|'General Purpose Mouse' for mouse support.
 expat			|'XML Parser Toolkit' needed for XBEL support.
 http://laurikari.net/tre/[TRE]						     \
-			|For regexp searching.  Version 0.7.5 works.
+			|For regexp searching.  Version 0.8.0 works.
 libsmbclient		|Library needed for smb:// protocol support.
 rxvt-unicode		|For terminal emulator which supports 88 colors.
 xterm with 256 colors	|Program atleast patch level  179 or rxvt program   \

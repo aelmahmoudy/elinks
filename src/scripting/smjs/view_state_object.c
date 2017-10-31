@@ -39,7 +39,7 @@ static const JSPropertySpec view_state_props[] = {
 
 /* @view_state_class.getProperty */
 static JSBool
-view_state_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+view_state_get_property(JSContext *ctx, JSObject *obj, jsid id, jsval *vp)
 {
 	struct view_state *vs;
 
@@ -51,13 +51,14 @@ view_state_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 
 	vs = JS_GetInstancePrivate(ctx, obj,
 				   (JSClass *) &view_state_class, NULL);
+	if (!vs) return JS_FALSE;
 
 	undef_to_jsval(ctx, vp);
 
-	if (!JSVAL_IS_INT(id))
+	if (!JSID_IS_INT(id))
 		return JS_FALSE;
 
-	switch (JSVAL_TO_INT(id)) {
+	switch (JSID_TO_INT(id)) {
 	case VIEW_STATE_PLAIN:
 		*vp = INT_TO_JSVAL(vs->plain);
 
@@ -80,7 +81,7 @@ view_state_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 
 /* @view_state_class.setProperty */
 static JSBool
-view_state_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+view_state_set_property(JSContext *ctx, JSObject *obj, jsid id, JSBool strict, jsval *vp)
 {
 	struct view_state *vs;
 
@@ -92,11 +93,12 @@ view_state_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 
 	vs = JS_GetInstancePrivate(ctx, obj,
 				   (JSClass *) &view_state_class, NULL);
+	if (!vs) return JS_FALSE;
 
-	if (!JSVAL_IS_INT(id))
+	if (!JSID_IS_INT(id))
 		return JS_FALSE;
 
-	switch (JSVAL_TO_INT(id)) {
+	switch (JSID_TO_INT(id)) {
 	case VIEW_STATE_PLAIN: {
 		vs->plain = atol(jsval_to_string(ctx, vp));
 
@@ -111,20 +113,47 @@ view_state_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	}
 }
 
+/** Pointed to by view_state_class.finalize.  SpiderMonkey automatically
+ * finalizes all objects before it frees the JSRuntime, so view_state.jsobject
+ * won't be left dangling.  */
+static void
+view_state_finalize(JSContext *ctx, JSObject *obj)
+{
+	struct view_state *vs;
+
+	assert(JS_InstanceOf(ctx, obj, (JSClass *) &view_state_class, NULL));
+	if_assert_failed return;
+
+	vs = JS_GetInstancePrivate(ctx, obj,
+	                           (JSClass *) &view_state_class, NULL);
+
+	if (!vs) return; /* already detached */
+
+	JS_SetPrivate(ctx, obj, NULL); /* perhaps not necessary */
+	assert(vs->jsobject == obj);
+	if_assert_failed return;
+	vs->jsobject = NULL;
+}
+
 static const JSClass view_state_class = {
 	"view_state",
 	JSCLASS_HAS_PRIVATE,	/* struct view_state * */
 	JS_PropertyStub, JS_PropertyStub,
 	view_state_get_property, view_state_set_property,
-	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub
+	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, view_state_finalize
 };
 
+/** Return an SMJS object through which scripts can access @a vs.  If there
+ * already is such an object, return that; otherwise create a new one.  */
 JSObject *
 smjs_get_view_state_object(struct view_state *vs)
 {
 	JSObject *view_state_object;
 
+	if (vs->jsobject) return vs->jsobject;
+
 	assert(smjs_ctx);
+	if_assert_failed return NULL;
 
 	view_state_object = JS_NewObject(smjs_ctx,
 	                                  (JSClass *) &view_state_class,
@@ -132,18 +161,22 @@ smjs_get_view_state_object(struct view_state *vs)
 
 	if (!view_state_object) return NULL;
 
-	if (JS_FALSE == JS_SetPrivate(smjs_ctx, view_state_object, vs))	/* to @view_state_class */
-		return NULL;
-
 	if (JS_FALSE == JS_DefineProperties(smjs_ctx, view_state_object,
 	                               (JSPropertySpec *) view_state_props))
 		return NULL;
 
+	/* Do this last, so that if any previous step fails, we can
+	 * just forget the object and its finalizer won't attempt to
+	 * access @vs.  */
+	if (JS_FALSE == JS_SetPrivate(smjs_ctx, view_state_object, vs))	/* to @view_state_class */
+		return NULL;
+
+	vs->jsobject = view_state_object;
 	return view_state_object;
 }
 
 static JSBool
-smjs_elinks_get_view_state(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+smjs_elinks_get_view_state(JSContext *ctx, JSObject *obj, jsid id, jsval *vp)
 {
 	JSObject *vs_obj;
 	struct view_state *vs;
@@ -163,6 +196,28 @@ smjs_elinks_get_view_state(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	return JS_TRUE;
 }
 
+/** Ensure that no JSObject contains the pointer @a vs.  This is called from
+ * destroy_vs.  If a JSObject was previously attached to the view state, the
+ * object will remain in memory but it will no longer be able to access the
+ * view state. */
+void
+smjs_detach_view_state_object(struct view_state *vs)
+{
+	assert(smjs_ctx);
+	assert(vs);
+	if_assert_failed return;
+
+	if (!vs->jsobject) return;
+
+	assert(JS_GetInstancePrivate(smjs_ctx, vs->jsobject,
+				     (JSClass *) &view_state_class, NULL)
+	       == vs);
+	if_assert_failed {}
+
+	JS_SetPrivate(smjs_ctx, vs->jsobject, NULL);
+	vs->jsobject = NULL;
+}
+
 void
 smjs_init_view_state_interface(void)
 {
@@ -170,6 +225,6 @@ smjs_init_view_state_interface(void)
 		return;
 
 	JS_DefineProperty(smjs_ctx, smjs_elinks_object, "vs", JSVAL_NULL,
-	                smjs_elinks_get_view_state, JS_PropertyStub,
+	                smjs_elinks_get_view_state, JS_StrictPropertyStub,
 	                JSPROP_ENUMERATE | JSPROP_PERMANENT | JSPROP_READONLY);
 }

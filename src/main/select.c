@@ -53,6 +53,12 @@ struct thread {
 	void *data;
 };
 
+#ifdef CONFIG_OS_WIN32
+/* CreatePipe produces big numbers for handles */
+#undef FD_SETSIZE
+#define FD_SETSIZE 4096
+#endif
+
 static struct thread threads[FD_SETSIZE];
 
 static fd_set w_read;

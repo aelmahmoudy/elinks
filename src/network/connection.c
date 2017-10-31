@@ -25,6 +25,7 @@
 #include "network/progress.h"
 #include "network/socket.h"
 #include "network/ssl/ssl.h"
+#include "protocol/http/http.h"
 #include "protocol/protocol.h"
 #include "protocol/proxy.h"
 #include "protocol/uri.h"
@@ -63,14 +64,13 @@ static INIT_LIST_OF(struct host_connection, host_connections);
 static INIT_LIST_OF(struct keepalive_connection, keepalive_connections);
 
 /* Prototypes */
-static void notify_connection_callbacks(struct connection *conn);
 static void check_keepalive_connections(void);
-
+static void notify_connection_callbacks(struct connection *conn);
 
 static /* inline */ enum connection_priority
 get_priority(struct connection *conn)
 {
-	enum connection_priority priority;
+	int priority;
 
 	for (priority = 0; priority < PRIORITIES; priority++)
 		if (conn->pri[priority])
@@ -308,7 +308,6 @@ init_connection(struct uri *uri, struct uri *proxied_uri, struct uri *referrer,
 	conn->cache_mode = cache_mode;
 
 	conn->content_encoding = ENCODING_NONE;
-	conn->stream_pipes[0] = conn->stream_pipes[1] = -1;
 	init_list(conn->downloads);
 	conn->est_length = -1;
 	conn->timer = TIMER_ID_UNDEF;
@@ -332,14 +331,26 @@ update_connection_progress(struct connection *conn)
 	update_progress(conn->progress, conn->received, conn->est_length, conn->from);
 }
 
-/* Progress timer callback for @conn->progress.  As explained in
- * @start_update_progress, this function must erase the expired timer
- * ID from @conn->progress->timer.  */
+/** Progress timer callback for @a conn->progress.  */
 static void
 stat_timer(struct connection *conn)
 {
 	update_connection_progress(conn);
-	/* The expired timer ID has now been erased.  */
+	notify_connection_callbacks(conn);
+}
+
+/** Progress timer callback for @a conn->upload_progress.  */
+static void
+upload_stat_timer(struct connection *conn)
+{
+	struct http_connection_info *http = conn->info;
+
+	assert(conn->http_upload_progress);
+	assert(http);
+	if_assert_failed return;
+
+	update_progress(conn->http_upload_progress, http->post.uploaded,
+		http->post.total_upload_length, http->post.uploaded);
 	notify_connection_callbacks(conn);
 }
 
@@ -348,15 +359,23 @@ set_connection_state(struct connection *conn, struct connection_state state)
 {
 	struct download *download;
 	struct progress *progress = conn->progress;
+	struct progress *upload_progress = conn->http_upload_progress;
 
 	if (is_in_result_state(conn->state) && is_in_progress_state(state))
 		conn->prev_error = conn->state;
 
 	conn->state = state;
 	if (is_in_state(conn->state, S_TRANS)) {
-		if (progress->timer == TIMER_ID_UNDEF) {
-			const unsigned int id = conn->id;
+		const unsigned int id = conn->id;
 
+		if (upload_progress && upload_progress->timer == TIMER_ID_UNDEF) {
+			start_update_progress(upload_progress,
+				(void (*)(void *)) upload_stat_timer, conn);
+			upload_stat_timer(conn);
+			if (connection_disappeared(conn, id))
+				return;
+		}
+		if (progress->timer == TIMER_ID_UNDEF) {
 			start_update_progress(progress, (void (*)(void *)) stat_timer, conn);
 			update_connection_progress(conn);
 			if (connection_disappeared(conn, id))
@@ -365,6 +384,7 @@ set_connection_state(struct connection *conn, struct connection_state state)
 
 	} else {
 		kill_timer(&progress->timer);
+		if (upload_progress) kill_timer(&upload_progress->timer);
 	}
 
 	foreach (download, conn->downloads) {
@@ -381,14 +401,7 @@ shutdown_connection_stream(struct connection *conn)
 	if (conn->stream) {
 		close_encoded(conn->stream);
 		conn->stream = NULL;
-	} else if (conn->stream_pipes[0] >= 0) {
-		/* close_encoded() usually closes this end of the pipe,
-		 * but open_encoded() apparently failed this time.  */
-		close(conn->stream_pipes[0]);
 	}
-	if (conn->stream_pipes[1] >= 0)
-		close(conn->stream_pipes[1]);
-	conn->stream_pipes[0] = conn->stream_pipes[1] = -1;
 }
 
 static void
@@ -417,6 +430,15 @@ free_connection_data(struct connection *conn)
 	shutdown_connection_stream(conn);
 
 	mem_free_set(&conn->info, NULL);
+	/* If conn->done is not NULL, it probably points to a function
+	 * that expects conn->info to be a specific kind of structure.
+	 * Such a function should not be called if a different pointer
+	 * is later assigned to conn->info.  Actually though, each
+	 * free_connection_data() call seems to be soon followed by
+	 * done_connection() so that conn->done would not be called
+	 * again in any case.  However, this assignment costs little
+	 * and may make things a bit safer.  */
+	conn->done = NULL;
 
 	kill_timer(&conn->timer);
 
@@ -424,7 +446,7 @@ free_connection_data(struct connection *conn)
 		done_host_connection(conn);
 }
 
-void
+static void
 notify_connection_callbacks(struct connection *conn)
 {
 	struct connection_state state = conn->state;
@@ -459,6 +481,8 @@ done_connection(struct connection *conn)
 	mem_free(conn->socket);
 	mem_free(conn->data_socket);
 	done_progress(conn->progress);
+	if (conn->http_upload_progress)
+		done_progress(conn->http_upload_progress);
 	mem_free(conn);
 	check_queue_bugs();
 }
@@ -752,7 +776,7 @@ abort_connection(struct connection *conn, struct connection_state state)
 void
 retry_connection(struct connection *conn, struct connection_state state)
 {
-	int max_tries = get_opt_int("connection.retries");
+	int max_tries = get_opt_int("connection.retries", NULL);
 
 	assertm(is_in_result_state(state),
 		"connection didn't end in result state (%d)", state);
@@ -806,8 +830,8 @@ static void
 check_queue(void)
 {
 	struct connection *conn;
-	int max_conns_to_host = get_opt_int("connection.max_connections_to_host");
-	int max_conns = get_opt_int("connection.max_connections");
+	int max_conns_to_host = get_opt_int("connection.max_connections_to_host", NULL);
+	int max_conns = get_opt_int("connection.max_connections", NULL);
 
 again:
 	conn = connection_queue.next;
@@ -964,6 +988,19 @@ load_uri(struct uri *uri, struct uri *referrer, struct download *download,
 		return 0;
 	}
 
+	if (download && cache_mode == CACHE_MODE_ALWAYS) {
+		cached = find_in_cache(uri);
+		if (cached) {
+			download->cached = cached;
+			download->state = connection_state(S_OK);
+			if (download->callback)
+				download->callback(download, download->data);
+			if (proxy_uri) done_uri(proxy_uri);
+			if (proxied_uri) done_uri(proxied_uri);
+			return 0;
+		}
+	}
+
 	conn = init_connection(proxy_uri, proxied_uri, referrer, start, cache_mode, pri);
 	if (!conn) {
 		if (download) {
@@ -1038,7 +1075,7 @@ cancel_download(struct download *download, int interrupt)
 }
 
 void
-move_download(struct download *old, struct download *new,
+move_download(struct download *old, struct download *new_,
 	      enum connection_priority newpri)
 {
 	struct connection *conn;
@@ -1051,29 +1088,29 @@ move_download(struct download *old, struct download *new,
 
 	conn = old->conn;
 
-	new->conn	= conn;
-	new->cached	= old->cached;
-	new->prev_error	= old->prev_error;
-	new->progress	= old->progress;
-	new->state	= old->state;
-	new->pri	= newpri;
+	new_->conn	= conn;
+	new_->cached	= old->cached;
+	new_->prev_error	= old->prev_error;
+	new_->progress	= old->progress;
+	new_->state	= old->state;
+	new_->pri	= newpri;
 
 	if (is_in_result_state(old->state)) {
-		/* Ensure that new->conn is always "valid", that is NULL if the
+		/* Ensure that new_->conn is always "valid", that is NULL if the
 		 * connection has been detached and non-NULL otherwise. */
-		if (new->callback) {
-			new->conn = NULL;
-			new->progress = NULL;
-			new->callback(new, new->data);
+		if (new_->callback) {
+			new_->conn = NULL;
+			new_->progress = NULL;
+			new_->callback(new_, new_->data);
 		}
 		return;
 	}
 
 	assertm(old->conn != NULL, "last state is %d", old->state);
 
-	conn->pri[new->pri]++;
-	add_to_list(conn->downloads, new);
-	/* In principle, we need to sort_queue() only if conn->pri[new->pri]
+	conn->pri[new_->pri]++;
+	add_to_list(conn->downloads, new_);
+	/* In principle, we need to sort_queue() only if conn->pri[new_->pri]
 	 * just changed from 0 to 1.  But the risk of bugs is smaller if we
 	 * sort every time.  */
 	sort_queue();
@@ -1101,7 +1138,8 @@ detach_connection(struct download *download, off_t pos)
 		total_len = (conn->est_length == -1) ? conn->from
 						     : conn->est_length;
 
-		if (total_len < (get_opt_long("document.cache.memory.size")
+		if (total_len < (get_opt_long("document.cache.memory.size",
+		                              NULL)
 				 * MAX_CACHED_OBJECT_PERCENT / 100)) {
 			/* This whole thing will fit to the memory anyway, so
 			 * there's no problem in detaching the connection. */
@@ -1153,8 +1191,8 @@ connection_timeout_1(struct connection *conn)
 {
 	install_timer(&conn->timer, (milliseconds_T)
 			((conn->unrestartable
-			 ? get_opt_int("connection.unrestartable_receive_timeout")
-			 : get_opt_int("connection.receive_timeout"))
+			 ? get_opt_int("connection.unrestartable_receive_timeout", NULL)
+			 : get_opt_int("connection.receive_timeout", NULL))
 			* 500), (void (*)(void *)) connection_timeout, conn);
 	/* The expired timer ID has now been erased.  */
 }
@@ -1166,8 +1204,8 @@ set_connection_timeout(struct connection *conn)
 
 	install_timer(&conn->timer, (milliseconds_T)
 			((conn->unrestartable
-			 ? get_opt_int("connection.unrestartable_receive_timeout")
-			 : get_opt_int("connection.receive_timeout"))
+			 ? get_opt_int("connection.unrestartable_receive_timeout", NULL)
+			 : get_opt_int("connection.receive_timeout", NULL))
 			* 500), (void (*)(void *)) connection_timeout_1, conn);
 }
 

@@ -57,17 +57,68 @@ struct dialog {
 
 	struct dialog_layout layout;
 
+	/** How many widgets have been added to this dialog.
+	 * The #widgets array may be larger than this if some
+	 * of the intended widgets have not yet been added.  */
 	int number_of_widgets;
+
 	struct widget widgets[1]; /* must be at end of struct */
+
+	/* There may be additional data after widgets[].  The size and
+	 * format of the additional data is specific to each dialog.
+	 * Dialogs typically place the buffer of each WIDGET_FIELD
+	 * widget somewhere in this additional-data area so that the
+	 * buffer need not be allocated and freed separately.
+	 *
+	 * When constructing a dialog, give the size of the additional
+	 * data as a parameter to sizeof_dialog() and calloc_dialog().
+	 * Then, use get_dialog_offset() to get the address of the
+	 * additional data.  */
 };
 
-/* Allocate a struct dialog for n - 1 widgets, one is already reserved in struct.
- * add_size bytes will be added. */
+/** Gets the amount of memory needed for a dialog.
+ *
+ * @param n
+ *   How many widgets there will be in the dialog.
+ * @param add_size
+ *   The size of the additional data, in bytes.
+ *
+ * @return
+ *   The total amount of memory needed for struct dialog, the widgets,
+ *   and the additional data.  This however does not include struct
+ *   dialog_data.
+ *
+ * struct dialog already reserves memory for one widget.  */
 #define sizeof_dialog(n, add_size) \
 	(sizeof(struct dialog) + ((n) - 1) * sizeof(struct widget) + (add_size))
 
+/** Allocates and clears memory for a dialog.
+ *
+ * @param n
+ *   How many widgets there will be in the dialog.
+ * @param add_size
+ *   The size of the additional data, in bytes.
+ *
+ * @return
+ *   struct dialog *; or NULL if out of memory.
+ *
+ * This macro sets dialog.number_of_widgets = 0.
+ * The caller can then add widgets to the dialog
+ * until dialog.number_of_widgets reaches @a n.  */
 #define calloc_dialog(n, add_size) ((struct dialog *) mem_calloc(1, sizeof_dialog(n, add_size)))
 
+/** Gets the address of the additional data of a dialog.
+ *
+ * @param dlg
+ *  struct dialog *dlg; the dialog that carries the additional data. 
+ * @param n
+ *  For how many widgets the dialog was allocated; i.e. the
+ *  @c n parameter of sizeof_dialog() and calloc_dialog().
+ *  This macro does not read dialog.number_of_widgets because
+ *  that is typically still zero when this macro is used.
+ *
+ * @return
+ *  The address of the additional data.  */
 #define get_dialog_offset(dlg, n) \
 	(((unsigned char *) dlg) + sizeof_dialog(n, 0))
 
@@ -99,7 +150,25 @@ struct dialog_data {
 	struct dialog *dlg;
 	struct memory_list *ml;
 
+	/** Size and location of the dialog box, excluding the drop shadow.
+	 * This includes the outer border and the frame.
+	 * The coordinates are relative to the terminal.  */
 	struct box box;
+
+	/** Size and location of the widget area and the inner border.
+	 * This is the area in which widgets can be drawn.
+	 * The frame of the dialog box is drawn around this area,
+	 * and the outer border is around the frame.
+	 * The coordinates are relative to the terminal.  */
+	struct box real_box;
+
+	/** Vertical scrolling of the widget area of the dialog box.
+	 * Widget Y screen coordinate = widget_data.box.y - dialog_data.y.
+	 * Initially, this is 0 and the coordinate system of the widget area
+	 * matches the coordinate system of the terminal.
+	 * Horizontal scrolling of dialog boxes has not been implemented.  */
+	int y;
+
 	int number_of_widgets;
 	int selected_widget_id;
 	struct term_event *term_event;

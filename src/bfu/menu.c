@@ -404,7 +404,7 @@ draw_menu_left_text_hk(struct terminal *term, unsigned char *text,
 {
 	struct color_pair *hk_color = get_bfu_color(term, "menu.hotkey.normal");
 	struct color_pair *hk_color_sel = get_bfu_color(term, "menu.hotkey.selected");
-	enum screen_char_attr hk_attr = get_opt_bool("ui.dialogs.underline_hotkeys")
+	enum screen_char_attr hk_attr = get_opt_bool("ui.dialogs.underline_hotkeys", NULL)
 				      ? SCREEN_ATTR_UNDERLINE : 0;
 	unsigned char c;
 	int xbase = x + L_TEXT_SPACE;
@@ -456,7 +456,7 @@ draw_menu_left_text_hk(struct terminal *term, unsigned char *text,
 
 #ifdef CONFIG_UTF8
 utf8:
-	end = strchr(text, '\0');
+	end = strchr((const char *)text, '\0');
 	text2 = text;
 	for (x = 0; x - !!hk_state < w && *text2; x++) {
 		unicode_val_T data;
@@ -556,7 +556,7 @@ display_menu(struct terminal *term, struct menu *menu)
 	draw_box(term, &box, ' ', 0, normal_color);
 	draw_border(term, &box, frame_color, 1);
 
-	if (get_opt_bool("ui.dialogs.shadows")) {
+	if (get_opt_bool("ui.dialogs.shadows", NULL)) {
 		/* Draw shadow */
 		draw_shadow(term, &menu->box,
 			    get_bfu_color(term, "dialog.shadow"), 2, 1);
@@ -672,7 +672,7 @@ display_menu(struct terminal *term, struct menu *menu)
 		}
 	}
 
-	redraw_from_window(menu->win);
+	redraw_windows(REDRAW_IN_FRONT_OF_WINDOW, menu->win);
 }
 
 
@@ -795,11 +795,11 @@ search_menu_item(struct menu_item *item, unsigned char *buffer,
 	text = stracpy(text);
 	if (!text) return 0;
 
-	match = strchr(text, '~');
+	match = strchr((const char *)text, '~');
 	if (match)
 		memmove(match, match + 1, strlen(match));
 
-	match = strcasestr(text, buffer);
+	match = strcasestr((const char *)text, (const char *)buffer);
 	mem_free(text);
 
 	return !!match;
@@ -937,6 +937,11 @@ menu_kbd_handler(struct menu *menu, struct term_event *ev)
 			search_menu(menu);
 			break;
 
+		case ACT_MENU_REDRAW:
+			display_menu(win->term, menu);
+			redraw_terminal_cls(win->term);
+			break;
+
 		case ACT_MENU_CANCEL:
 			if (list_has_next(win->term->windows, win)
 			    && win->next->handler == mainmenu_handler)
@@ -959,10 +964,28 @@ menu_kbd_handler(struct menu *menu, struct term_event *ev)
 			if (!check_kbd_label_key(ev))
 				break;
 
-			s = check_hotkeys(menu, key, win->term);
+			if (menu->hotkeys != -1) {
+				s = check_hotkeys(menu, key, win->term);
 
-			if (s || check_not_so_hot_keys(menu, key, win->term))
-				scroll_menu(menu, 0, 1);
+				if (s || check_not_so_hot_keys(menu, key, win->term)) {
+					scroll_menu(menu, 0, 1);
+				}
+			} else {
+				struct terminal *term = win->term;
+				struct keybinding *auto_complete = kbd_nm_lookup(KEYMAP_EDIT, "auto-complete");
+
+				delete_window_ev(win, NULL);
+				term_send_event(term, ev);
+
+				if (auto_complete) {
+					struct term_event complete;
+
+					complete.ev = EVENT_KBD;
+					complete.info.keyboard = auto_complete->kbd;
+					term_send_event(term, &complete);
+				}
+				return;
+			}
 		}
 	}
 
@@ -1185,7 +1208,7 @@ display_mainmenu(struct terminal *term, struct menu *menu)
 		draw_box(term, &box, '>', 0, normal_color);
 	}
 
-	redraw_from_window(menu->win);
+	redraw_windows(REDRAW_IN_FRONT_OF_WINDOW, menu->win);
 }
 
 
@@ -1296,7 +1319,8 @@ mainmenu_kbd_handler(struct menu *menu, struct term_event *ev)
 		break;
 
 	case ACT_MENU_REDRAW:
-		/* Just call display_mainmenu() */
+		display_mainmenu(win->term, menu);
+		redraw_terminal_cls(win->term);
 		break;
 
 	default:

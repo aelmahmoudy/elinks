@@ -20,7 +20,7 @@ struct scanner_token {
 	int precedence;
 
 	/** The start of the token string and the token length */
-	unsigned char *string;
+	const unsigned char *string;
 	int length;
 };
 
@@ -36,13 +36,15 @@ struct scanner_token {
 #define scanner_token_contains(token, str) \
 	scanner_token_strlcasecmp(token, str, sizeof(str) - 1)
 
+enum scan_type { SCAN_RANGE, SCAN_STRING, SCAN_END };
+union scan_table_data {
+	struct { unsigned char *source; long length; } string;
+	struct { unsigned char *start; long end; } range;
+};
 
 struct scan_table_info {
-	enum { SCAN_RANGE, SCAN_STRING, SCAN_END } type;
-	union scan_table_data {
-		struct { unsigned char *source; long length; } string;
-		struct { unsigned char *start; long end; } range;
-	} data;
+	enum scan_type type;
+	union scan_table_data data;
 	int bits;
 };
 
@@ -88,7 +90,7 @@ struct scanner_info {
 /** Initializes the scanner.
  * @relates scanner */
 void init_scanner(struct scanner *scanner, struct scanner_info *scanner_info,
-		  unsigned char *string, unsigned char *end);
+		  const unsigned char *string, const unsigned char *end);
 
 /** The number of tokens in the scanners token table:
  * At best it should be big enough to contain properties with space separated
@@ -102,7 +104,7 @@ struct scanner {
 	/** The very start of the scanned string, the position in the string
 	 * where to scan next and the end of the string. If #position is NULL
 	 * it means that no more tokens can be retrieved from the string. */
-	unsigned char *string, *position, *end;
+	const unsigned char *string, *position, *end;
 
 	/** The current token and number of scanned tokens in the table.
 	 * If the number of scanned tokens is less than ::SCANNER_TOKENS

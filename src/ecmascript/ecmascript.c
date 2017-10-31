@@ -65,6 +65,8 @@ static union option_info ecmascript_options[] = {
 	NULL_OPTION_INFO,
 };
 
+static int interpreter_count;
+
 struct ecmascript_interpreter *
 ecmascript_get_interpreter(struct view_state *vs)
 {
@@ -76,6 +78,8 @@ ecmascript_get_interpreter(struct view_state *vs)
 	if (!interpreter)
 		return NULL;
 
+	++interpreter_count;
+
 	interpreter->vs = vs;
 	interpreter->vs->ecmascript_fragile = 0;
 	init_list(interpreter->onload_snippets);
@@ -86,6 +90,7 @@ ecmascript_get_interpreter(struct view_state *vs)
 		/* Undo what was done above.  */
 		interpreter->vs->ecmascript_fragile = 1;
 		mem_free(interpreter);
+		--interpreter_count;
 		return NULL;
 	}
 		
@@ -111,6 +116,13 @@ ecmascript_put_interpreter(struct ecmascript_interpreter *interpreter)
 	interpreter->vs->ecmascript = NULL;
 	interpreter->vs->ecmascript_fragile = 1;
 	mem_free(interpreter);
+	--interpreter_count;
+}
+
+int
+ecmascript_get_interpreter_count(void)
+{
+	return interpreter_count;
 }
 
 void
@@ -271,7 +283,7 @@ ecmascript_set_action(unsigned char **action, unsigned char *string)
 			done_uri(uri);
 			mem_free(string);
 		} else { /* relative uri */
-			unsigned char *last_slash = strrchr(*action, '/');
+			unsigned char *last_slash = strrchr((const char *)*action, '/');
 			unsigned char *new_action;
 
 			if (last_slash) *(last_slash + 1) = '\0';

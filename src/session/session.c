@@ -18,9 +18,8 @@
 #include "config/options.h"
 #include "dialogs/menu.h"
 #include "dialogs/status.h"
+#include "document/document.h"
 #include "document/html/frames.h"
-#include "document/html/parser.h"
-#include "document/html/renderer.h"
 #include "document/refresh.h"
 #include "document/renderer.h"
 #include "document/view.h"
@@ -32,8 +31,12 @@
 #include "network/connection.h"
 #include "network/state.h"
 #include "osdep/newwin.h"
+#include "protocol/http/blacklist.h"
 #include "protocol/protocol.h"
 #include "protocol/uri.h"
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+# include "scripting/smjs/smjs.h"
+#endif
 #include "session/download.h"
 #include "session/history.h"
 #include "session/location.h"
@@ -255,6 +258,32 @@ get_current_download(struct session *ses)
 	return download;
 }
 
+static void
+done_retry_connection_without_verification(void *data)
+{
+	struct delayed_open *deo = (struct delayed_open *)data;
+
+	if (deo) {
+		done_uri(deo->uri);
+		mem_free(deo);
+	}
+}
+
+static void
+retry_connection_without_verification(void *data)
+{
+	struct delayed_open *deo = (struct delayed_open *)data;
+
+	if (deo) {
+		if (deo->uri->hostlen) {
+			add_blacklist_entry(deo->uri, SERVER_BLACKLIST_NO_CERT_VERIFY);
+		}
+		goto_uri(deo->ses, deo->uri);
+		done_uri(deo->uri);
+		mem_free(deo);
+	}
+}
+
 void
 print_error_dialog(struct session *ses, struct connection_state state,
 		   struct uri *uri, enum connection_priority priority)
@@ -284,9 +313,27 @@ print_error_dialog(struct session *ses, struct connection_state state,
 
 	add_to_string(&msg, get_state_message(state, ses->tab->term));
 
-	info_box(ses->tab->term, MSGBOX_FREE_TEXT,
-		 N_("Error"), ALIGN_CENTER,
-		 msg.source);
+	if (!uri || uri->protocol != PROTOCOL_HTTPS) {
+		info_box(ses->tab->term, MSGBOX_FREE_TEXT,
+		N_("Error"), ALIGN_CENTER,
+		msg.source);
+	} else {
+		struct delayed_open *deo = mem_calloc(1, sizeof(*deo));
+
+		if (!deo) return;
+
+		add_to_string(&msg, "\n\n");
+		add_to_string(&msg, N_("Retry without verification?"));
+		deo->ses = ses;
+		deo->uri = get_uri_reference(uri);
+
+		msg_box(ses->tab->term, NULL, MSGBOX_FREE_TEXT,
+		N_("Error"), ALIGN_CENTER,
+		msg.source,
+		deo, 2,
+		MSG_BOX_BUTTON(N_("~Yes"), retry_connection_without_verification, B_ENTER),
+		MSG_BOX_BUTTON(N_("~No"), done_retry_connection_without_verification, B_ESC));
+	}
 
 	/* TODO: retry */
 }
@@ -660,13 +707,13 @@ file_loading_callback(struct download *download, struct file_to_load *ftl)
 	if (ftl->cached && !ftl->cached->redirect_get && download->pri != PRI_CSS) {
 		struct session *ses = ftl->ses;
 		struct uri *loading_uri = ses->loading_uri;
-		unsigned char *target_frame = ses->task.target.frame;
+		unsigned char *target_frame = null_or_stracpy(ses->task.target.frame);
 
 		ses->loading_uri = ftl->uri;
-		ses->task.target.frame = ftl->target_frame;
+		mem_free_set(&ses->task.target.frame, null_or_stracpy(ftl->target_frame));
 		setup_download_handler(ses, &ftl->download, ftl->cached, 1);
 		ses->loading_uri = loading_uri;
-		ses->task.target.frame = target_frame;
+		mem_free_set(&ses->task.target.frame, target_frame);
 	}
 
 	doc_loading_callback(download, ftl->ses);
@@ -766,7 +813,7 @@ setup_first_session(struct session *ses, struct uri *uri)
 	/* [gettext_accelerator_context(setup_first_session)] */
 	struct terminal *term = ses->tab->term;
 
-	if (!*get_opt_str("protocol.http.user_agent")) {
+	if (!*get_opt_str("protocol.http.user_agent", NULL)) {
 		info_box(term, 0,
 			 N_("Warning"), ALIGN_CENTER,
 			 N_("You have an empty string in protocol.http.user_agent - "
@@ -781,11 +828,11 @@ setup_first_session(struct session *ses, struct uri *uri)
 			 "any inconvience caused."));
 	}
 
-	if (!get_opt_bool("config.saving_style_w")) {
+	if (!get_opt_bool("config.saving_style_w", NULL)) {
 		struct option *opt = get_opt_rec(config_options, "config.saving_style_w");
 		opt->value.number = 1;
 		option_changed(ses, opt);
-		if (get_opt_int("config.saving_style") != 3) {
+		if (get_opt_int("config.saving_style", NULL) != 3) {
 			info_box(term, 0,
 				 N_("Warning"), ALIGN_CENTER,
 				 N_("You have option config.saving_style set to "
@@ -825,7 +872,7 @@ setup_first_session(struct session *ses, struct uri *uri)
 		if (!uri) return 1;
 
 #ifdef CONFIG_BOOKMARKS
-	} else if (!uri && get_opt_bool("ui.sessions.auto_restore")) {
+	} else if (!uri && get_opt_bool("ui.sessions.auto_restore", NULL)) {
 		unsigned char *folder; /* UTF-8 */
 
 		folder = get_auto_save_bookmark_foldername_utf8();
@@ -865,7 +912,7 @@ setup_session(struct session *ses, struct uri *uri, struct session *base)
 		goto_uri(ses, uri);
 
 	} else if (!goto_url_home(ses)) {
-		if (get_opt_bool("ui.startup_goto_dialog")) {
+		if (get_opt_bool("ui.startup_goto_dialog", NULL)) {
 			dialog_goto_url_open(ses);
 		}
 	}
@@ -886,6 +933,8 @@ init_session(struct session *base_session, struct terminal *term,
 		return NULL;
 	}
 
+	ses->option = copy_option(config_options,
+	                          CO_SHALLOW | CO_NO_LISTBOX_ITEM);
 	create_history(&ses->history);
 	init_list(ses->scrn_frames);
 	init_list(ses->more_files);
@@ -899,6 +948,8 @@ init_session(struct session *base_session, struct terminal *term,
 	ses->status.insert_mode_led = register_led(ses, 1);
 	ses->status.ecmascript_led = register_led(ses, 2);
 	ses->status.popup_led = register_led(ses, 3);
+
+	ses->status.download_led = register_led(ses, 5);
 #endif
 	ses->status.force_show_status_bar = -1;
 	ses->status.force_show_title_bar = -1;
@@ -956,7 +1007,7 @@ init_remote_session(struct session *ses, enum remote_session_flags *remote_ptr,
 		 * inaccessible. Maybe we should not support this kind
 		 * of thing or make the window focus detecting code
 		 * more intelligent. --jonas */
-		open_uri_in_new_tab(ses, uri, 0, 1);
+		open_uri_in_new_tab(ses, uri, 0, 0);
 
 		if (remote & SES_REMOTE_PROMPT_URL) {
 			dialog_goto_url_open(ses);
@@ -1001,6 +1052,9 @@ init_remote_session(struct session *ses, enum remote_session_flags *remote_ptr,
 
 	} else if (remote & SES_REMOTE_PROMPT_URL) {
 		dialog_goto_url_open(ses);
+
+	} else if (remote & SES_REMOTE_RELOAD) {
+		reload(ses, CACHE_MODE_FORCE_RELOAD);
 	}
 }
 
@@ -1175,6 +1229,9 @@ destroy_session(struct session *ses)
 	assert(ses);
 	if_assert_failed return;
 
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+	smjs_detach_session_object(ses);
+#endif
 	destroy_downloads(ses);
 	abort_loading(ses, 0);
 	free_files(ses);
@@ -1205,11 +1262,22 @@ destroy_session(struct session *ses)
 #ifdef CONFIG_ECMASCRIPT
 	mem_free_if(ses->status.window_status);
 #endif
+	if (ses->option) {
+		delete_option(ses->option);
+		ses->option = NULL;
+	}
 	del_from_list(ses);
 }
 
 void
 reload(struct session *ses, enum cache_mode cache_mode)
+{
+	reload_frame(ses, NULL, cache_mode);
+}
+
+void
+reload_frame(struct session *ses, unsigned char *name,
+             enum cache_mode cache_mode)
 {
 	abort_loading(ses, 0);
 
@@ -1236,6 +1304,8 @@ reload(struct session *ses, enum cache_mode cache_mode)
 		 * credentials. */
 		loc->download.data = ses;
 		loc->download.callback = (download_callback_T *) doc_loading_callback;
+
+		mem_free_set(&ses->task.target.frame, null_or_stracpy(name));
 
 		load_uri(loc->vs.uri, ses->referrer, &loc->download, PRI_MAIN, cache_mode, -1);
 
@@ -1424,9 +1494,37 @@ eat_kbd_repeat_count(struct session *ses)
 {
 	int count = ses->kbdprefix.repeat_count;
 
-	ses->kbdprefix.repeat_count = 0;
+	set_kbd_repeat_count(ses, 0);
 
 	/* Clear status bar when prefix is eaten (bug 930) */
 	print_screen_status(ses);
 	return count;
+}
+
+/** @relates session */
+int
+set_kbd_repeat_count(struct session *ses, int new_count)
+{
+	int old_count = ses->kbdprefix.repeat_count;
+
+	if (new_count == old_count)
+		return old_count;
+
+	ses->kbdprefix.repeat_count = new_count;
+
+	/* Update the status bar. */
+	print_screen_status(ses);
+
+	/* Clear the old link highlighting. */
+	draw_formatted(ses, 0);
+
+	if (new_count != 0) {
+		struct document_view *doc_view = current_frame(ses);
+
+		highlight_links_with_prefixes_that_start_with_n(ses->tab->term,
+		                                                doc_view,
+		                                                new_count);
+	}
+
+	return new_count;
 }

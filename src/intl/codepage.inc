@@ -4884,7 +4884,100 @@ unsigned char *const aliases_utf8 [] = {
 	NULL
 };
 
+/*** Big5, Big5-HKSCS ***/
+
+/* many sites set charset="Big5", although they really use "Big5-hkscs".
+Big5-hkscs is superset of Big5. */
+unsigned char *const aliases_big5 [] = {
+	"Big5-HKSCS",
+	"Big5",
+	NULL
+};
+
+/*** Shift JIS ***/
+
+unsigned char *const aliases_shift_jis [] = {
+	"shift_jis",
+	"shift-jis",
+	"sjis",
+	NULL
+};
+
+/*** EUC_CN ***/
+
+unsigned char *const aliases_euc_cn [] = {
+	"euc-cn",
+	"euc_cn",
+	NULL
+};
+
+/*** EUC_JP ***/
+
+unsigned char *const aliases_euc_jp [] = {
+	"euc-jp",
+	"euc_jp",
+	NULL
+};
+
+/*** EUC_KR ***/
+
+unsigned char *const aliases_euc_kr [] = {
+	"euc-kr",
+	"euc_kr",
+	NULL
+};
+
+/*** EUC_TW ***/
+
+unsigned char *const aliases_euc_tw [] = {
+	"euc-tw",
+	"euc_tw",
+	NULL
+};
+
+/*** GBK ***/
+
+unsigned char *const aliases_gbk [] = {
+	"gbk",
+	"936",
+	"cp936",
+	"windows936",
+	"windows-936",
+	NULL
+};
+
+/*** GB2312 ***/
+
+unsigned char *const aliases_gb2312 [] = {
+	"gb2312",
+	"gb-2312",
+	"gb_2312",
+	"gb 2312",
+	NULL
+};
+
+/*** GB18030 ***/
+
+unsigned char *const aliases_gb18030 [] = {
+	"gb18030",
+	"gb-18030",
+	"gb_18030",
+	"gb 18030",
+	NULL
+};
+
+/*** ISO2022JP ***/
+
+unsigned char *const aliases_iso2022jp [] = {
+	"iso2022jp",
+	"iso-2022-jp",
+	NULL
+};
+
+
 /*** NULL ***/
+
+
 
 const uint16_t highhalf_NULL [] = {
 	0xFFFF,0xFFFF,0xFFFF,0xFFFF, 0xFFFF,0xFFFF,0xFFFF,0xFFFF,
@@ -4910,42 +5003,52 @@ const struct table_entry table_NULL [] = {
 };
 
 const struct codepage_desc codepages [] = {
-	{"7-bit ASCII", aliases_7bit, highhalf_7bit, table_7bit},
-	{"ISO 8859-1", aliases_8859_1, highhalf_8859_1, table_8859_1},
-	{"ISO 8859-2", aliases_8859_2, highhalf_8859_2, table_8859_2},
-	{"ISO 8859-3", aliases_8859_3, highhalf_8859_3, table_8859_3},
-	{"ISO 8859-4", aliases_8859_4, highhalf_8859_4, table_8859_4},
-	{"ISO 8859-5", aliases_8859_5, highhalf_8859_5, table_8859_5},
-	{"ISO 8859-6", aliases_8859_6, highhalf_8859_6, table_8859_6},
-	{"ISO 8859-7", aliases_8859_7, highhalf_8859_7, table_8859_7},
-	{"ISO 8859-8", aliases_8859_8, highhalf_8859_8, table_8859_8},
-	{"ISO 8859-9", aliases_8859_9, highhalf_8859_9, table_8859_9},
-	{"ISO 8859-10", aliases_8859_10, highhalf_8859_10, table_8859_10},
-	{"ISO 8859-13", aliases_8859_13, highhalf_8859_13, table_8859_13},
-	{"ISO 8859-14", aliases_8859_14, highhalf_8859_14, table_8859_14},
-	{"ISO 8859-15", aliases_8859_15, highhalf_8859_15, table_8859_15},
-	{"ISO 8859-16", aliases_8859_16, highhalf_8859_16, table_8859_16},
-	{"Window$ 1250", aliases_cp1250, highhalf_cp1250, table_cp1250},
-	{"Window$ 1251", aliases_cp1251, highhalf_cp1251, table_cp1251},
-	{"Window$ 1252", aliases_cp1252, highhalf_cp1252, table_cp1252},
-	{"Window$ 1256", aliases_cp1256, highhalf_cp1256, table_cp1256},
-	{"Window$ 1257", aliases_cp1257, highhalf_cp1257, table_cp1257},
-	{"CP 437", aliases_cp437, highhalf_cp437, table_cp437},
-	{"CP 737", aliases_cp737, highhalf_cp737, table_cp737},
-	{"CP 850", aliases_cp850, highhalf_cp850, table_cp850},
-	{"CP 852", aliases_cp852, highhalf_cp852, table_cp852},
-	{"CP 866", aliases_cp866, highhalf_cp866, table_cp866},
-	{"CP 1125 (Ukrainian)", aliases_cp1125, highhalf_cp1125, table_cp1125},
-	{"MacRoman 2000", aliases_macroman, highhalf_macroman, table_macroman},
-	{"Mac latin 2", aliases_mac_lat2, highhalf_mac_lat2, table_mac_lat2},
-	{"Kamenicky Brothers", aliases_kamen, highhalf_kamen, table_kamen},
-	{"KOI8-R", aliases_koi8_r, highhalf_koi8_r, table_koi8_r},
-	{"KOI8-U", aliases_koi8_u, highhalf_koi8_u, table_koi8_u},
-	{"KOI8-RU", aliases_koi8_ru, highhalf_koi8_ru, table_koi8_ru},
-	{"TCVN-5712", aliases_tcvn5712, highhalf_tcvn5712, table_tcvn5712},
-	{"VISCII", aliases_viscii, highhalf_viscii, table_viscii},
-	{"Unicode UTF-8", aliases_utf8, highhalf_utf8, table_utf8},
-	{NULL, NULL, NULL}
+	{"7-bit ASCII", aliases_7bit, highhalf_7bit, table_7bit, 0},
+	{"ISO 8859-1", aliases_8859_1, highhalf_8859_1, table_8859_1, 0},
+	{"ISO 8859-2", aliases_8859_2, highhalf_8859_2, table_8859_2, 0},
+	{"ISO 8859-3", aliases_8859_3, highhalf_8859_3, table_8859_3, 0},
+	{"ISO 8859-4", aliases_8859_4, highhalf_8859_4, table_8859_4, 0},
+	{"ISO 8859-5", aliases_8859_5, highhalf_8859_5, table_8859_5, 0},
+	{"ISO 8859-6", aliases_8859_6, highhalf_8859_6, table_8859_6, 0},
+	{"ISO 8859-7", aliases_8859_7, highhalf_8859_7, table_8859_7, 0},
+	{"ISO 8859-8", aliases_8859_8, highhalf_8859_8, table_8859_8, 0},
+	{"ISO 8859-9", aliases_8859_9, highhalf_8859_9, table_8859_9, 0},
+	{"ISO 8859-10", aliases_8859_10, highhalf_8859_10, table_8859_10, 0},
+	{"ISO 8859-13", aliases_8859_13, highhalf_8859_13, table_8859_13, 0},
+	{"ISO 8859-14", aliases_8859_14, highhalf_8859_14, table_8859_14, 0},
+	{"ISO 8859-15", aliases_8859_15, highhalf_8859_15, table_8859_15, 0},
+	{"ISO 8859-16", aliases_8859_16, highhalf_8859_16, table_8859_16, 0},
+	{"Window$ 1250", aliases_cp1250, highhalf_cp1250, table_cp1250, 0},
+	{"Window$ 1251", aliases_cp1251, highhalf_cp1251, table_cp1251, 0},
+	{"Window$ 1252", aliases_cp1252, highhalf_cp1252, table_cp1252, 0},
+	{"Window$ 1256", aliases_cp1256, highhalf_cp1256, table_cp1256, 0},
+	{"Window$ 1257", aliases_cp1257, highhalf_cp1257, table_cp1257, 0},
+	{"CP 437", aliases_cp437, highhalf_cp437, table_cp437, 0},
+	{"CP 737", aliases_cp737, highhalf_cp737, table_cp737, 0},
+	{"CP 850", aliases_cp850, highhalf_cp850, table_cp850, 0},
+	{"CP 852", aliases_cp852, highhalf_cp852, table_cp852, 0},
+	{"CP 866", aliases_cp866, highhalf_cp866, table_cp866, 0},
+	{"CP 1125 (Ukrainian)", aliases_cp1125, highhalf_cp1125, table_cp1125, 0},
+	{"MacRoman 2000", aliases_macroman, highhalf_macroman, table_macroman, 0},
+	{"Mac latin 2", aliases_mac_lat2, highhalf_mac_lat2, table_mac_lat2, 0},
+	{"Kamenicky Brothers", aliases_kamen, highhalf_kamen, table_kamen, 0},
+	{"KOI8-R", aliases_koi8_r, highhalf_koi8_r, table_koi8_r, 0},
+	{"KOI8-U", aliases_koi8_u, highhalf_koi8_u, table_koi8_u, 0},
+	{"KOI8-RU", aliases_koi8_ru, highhalf_koi8_ru, table_koi8_ru, 0},
+	{"TCVN-5712", aliases_tcvn5712, highhalf_tcvn5712, table_tcvn5712, 0},
+	{"VISCII", aliases_viscii, highhalf_viscii, table_viscii, 0},
+	{"Unicode UTF-8", aliases_utf8, highhalf_utf8, table_utf8, 0},
+	{"Big5", aliases_big5, highhalf_NULL, table_NULL, 1},
+	{"Shift-JIS", aliases_shift_jis, highhalf_NULL, table_NULL, 1},
+	{"EUC-CN", aliases_euc_cn, highhalf_NULL, table_NULL, 1},
+	{"EUC-JP", aliases_euc_jp, highhalf_NULL, table_NULL, 1},
+	{"EUC-KR", aliases_euc_kr, highhalf_NULL, table_NULL, 1},
+	{"EUC-TW", aliases_euc_tw, highhalf_NULL, table_NULL, 1},
+	{"GBK", aliases_gbk, highhalf_NULL, table_NULL, 1},
+	{"GB2312", aliases_gb2312, highhalf_NULL, table_NULL, 1},
+	{"GB18030", aliases_gb18030, highhalf_NULL, table_NULL, 1},
+	{"ISO-2022-JP", aliases_iso2022jp, highhalf_NULL, table_NULL, 1},
+	{NULL, NULL, NULL, 0}
 };
 
-#define N_CODEPAGES 35
+#define N_CODEPAGES 45

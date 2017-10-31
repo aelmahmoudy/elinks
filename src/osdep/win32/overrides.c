@@ -543,7 +543,8 @@ select_dump(int num_fds, const fd_set *rd, const fd_set *wr, const fd_set *ex)
 	      ex ? fd_set_str(buf_ex,sizeof(buf_ex),ex,num_fds) : "<none>");
 }
 
-static int select_read (int fd, struct fd_set *rd)
+static int
+select_read(int fd, struct fd_set *rd)
 {
 	int rc = 0;
 	HANDLE hnd = (HANDLE) fd;
@@ -905,9 +906,9 @@ win32_strerror(int err)
 	}
 
 	/* strip trailing '\r\n' or '\n'. */
-	if ((p = strrchr(buf,'\n')) != NULL && (p - buf) >= 2)
+	if ((p = strrchr((const char *)buf,'\n')) != NULL && (p - buf) >= 2)
 		*p = '\0';
-	if ((p = strrchr(buf,'\r')) != NULL && (p - buf) >= 1)
+	if ((p = strrchr((const char *)buf,'\r')) != NULL && (p - buf) >= 1)
 		*p = '\0';
 
 	return buf;

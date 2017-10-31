@@ -18,11 +18,14 @@
 
 #include "bfu/leds.h"
 #include "config/options.h"
+#include "document/document.h"
+#include "document/view.h"
 #include "intl/gettext/libintl.h"
 #include "main/module.h"
 #include "main/timer.h"
 #include "session/session.h"
 #include "terminal/draw.h"
+#include "terminal/tab.h"
 #include "terminal/terminal.h"
 #include "terminal/window.h"
 #include "util/color.h"
@@ -30,15 +33,13 @@
 #include "util/time.h"
 #include "viewer/timer.h"
 
-#define LEDS_REFRESH_DELAY	((milliseconds_T) 100)
-
 /* Current leds allocation:
  * 0 - SSL connection indicator
  * 1 - Insert-mode indicator
  * 2 - JavaScript Error indicator
  * 3 - JavaScript pop-up blocking indicator
  * 4 - unused, reserved for Lua
- * 5 - unused */
+ * 5 - download in progress */
 
 /* XXX: Currently, the leds toggling is quite hackish, some more work should go
  * to it (ie. some led hooks called in sync_leds() to light the leds
@@ -64,6 +65,8 @@ enum led_option {
 	LEDS_CLOCK_FORMAT,
 	LEDS_CLOCK_ALIAS,
 
+	LEDS_SHOW_IP_ENABLE,
+
 	LEDS_PANEL_TREE,
 	LEDS_PANEL_ENABLE,
 
@@ -83,8 +86,13 @@ static union option_info led_options[] = {
 		N_("Format string for the digital clock. See the strftime(3) "
 		"manpage for details.")),
 
+
 	/* Compatibility alias. Added: 2004-04-22, 0.9.CVS. */
 	INIT_OPT_ALIAS("ui.timer", "clock", 0, "ui.clock"),
+
+	INIT_OPT_BOOL("ui", N_("Show IP"),
+		"show_ip", 0, 0,
+		N_("Whether to display IP of the document in the status bar.")),
 
 
 	INIT_OPT_TREE("ui", N_("LEDs"),
@@ -103,6 +111,7 @@ static union option_info led_options[] = {
 #define get_leds_clock_enable()		get_opt_leds(LEDS_CLOCK_ENABLE).number
 #define get_leds_clock_format()		get_opt_leds(LEDS_CLOCK_FORMAT).string
 #define get_leds_panel_enable()		get_opt_leds(LEDS_PANEL_ENABLE).number
+#define get_leds_show_ip_enable()	get_opt_leds(LEDS_SHOW_IP_ENABLE).number
 
 void
 init_leds(struct module *module)
@@ -127,6 +136,12 @@ set_led_value(struct led *led, unsigned char value)
 		led->value__ = value;
 		led->value_changed__ = 1;
 	}
+}
+
+unsigned char
+get_led_value(struct led *led)
+{
+	return led->value__;
 }
 
 void
@@ -162,6 +177,25 @@ draw_timer(struct terminal *term, int xpos, int ypos, struct color_pair *color)
 	return length;
 }
 
+static int
+draw_show_ip(struct session *ses, int xpos, int ypos, struct color_pair *color)
+{
+
+	if (ses->doc_view && ses->doc_view->document && ses->doc_view->document->ip) {
+		struct terminal *term = ses->tab->term;
+		unsigned char *s = ses->doc_view->document->ip;
+		int length = strlen(s);
+		int i;
+
+		for (i = length - 1; i >= 0; i--)
+			draw_char(term, xpos - (length - i), ypos, s[i], 0, color);
+
+		return length;
+	}
+	return 0;
+}
+
+
 #ifdef HAVE_STRFTIME
 static int
 draw_clock(struct terminal *term, int xpos, int ypos, struct color_pair *color)
@@ -180,6 +214,21 @@ draw_clock(struct terminal *term, int xpos, int ypos, struct color_pair *color)
 }
 #endif
 
+static milliseconds_T
+compute_redraw_interval(void)
+{
+	if (are_there_downloads())
+		return 100;
+
+	/* TODO: Check whether the time format includes seconds.  If not,
+	 * return milliseconds to next minute. */
+
+	if (get_leds_clock_enable())
+		return 1000;
+
+	return 0;
+}
+
 void
 draw_leds(struct session *ses)
 {
@@ -193,7 +242,7 @@ draw_leds(struct session *ses)
 
 	/* This should be done elsewhere, but this is very nice place where we
 	 * could do that easily. */
-	if (get_opt_int("ui.timer.enable") == 2) {
+	if (get_opt_int("ui.timer.enable", NULL) == 2) {
 		led_color = get_bfu_color(term, "status.status-text");
 		if (!led_color) goto end;
 
@@ -213,6 +262,12 @@ draw_leds(struct session *ses)
 	}
 #endif
 
+	if (get_leds_show_ip_enable()) {
+		struct color_pair *color = get_bfu_color(term, "status.showip-text");
+
+		if (color) term->leds_length += draw_show_ip(ses, xpos - term->leds_length, ypos, color);
+	}
+
 	/* We must shift the whole thing by one char to left, because we don't
 	 * draft the char in the right-down corner :(. */
 
@@ -231,8 +286,12 @@ draw_leds(struct session *ses)
 
 end:
 	/* Redraw each 100ms. */
-	if (!drawing && redraw_timer == TIMER_ID_UNDEF)
-		install_timer(&redraw_timer, LEDS_REFRESH_DELAY, redraw_leds, NULL);
+	if (!drawing && redraw_timer == TIMER_ID_UNDEF) {
+		milliseconds_T delay = compute_redraw_interval();
+
+		if (delay)
+			install_timer(&redraw_timer, delay, redraw_leds, NULL);
+	}
 }
 
 /* Determine if leds redrawing is necessary. Returns non-zero if so. */
@@ -268,29 +327,63 @@ sync_leds(struct session *ses)
 	return 0;
 }
 
+static void
+update_download_led(struct session *ses)
+{
+	struct session_status *status = &ses->status;
+
+	if (are_there_downloads()) {
+		unsigned char led = get_led_value(status->download_led);
+
+		switch (led) {
+			case '-' : led = '\\'; break;
+			case '\\': led = '|'; break;
+			case '|' : led = '/'; break;
+			default: led = '-';
+		}
+
+		set_led_value(status->download_led, led);
+	} else {
+		unset_led_value(status->download_led);
+	}
+}
+
 /* Timer callback for @redraw_timer.  As explained in @install_timer,
  * this function must erase the expired timer ID from all variables.  */
 static void
 redraw_leds(void *xxx)
 {
-	struct session *ses;
+	struct terminal *term;
+	milliseconds_T delay;
+
+	redraw_timer = TIMER_ID_UNDEF;
 
 	if (!get_leds_panel_enable()
-	    && get_opt_int("ui.timer.enable") != 2) {
-		redraw_timer = TIMER_ID_UNDEF;
+	    && get_opt_int("ui.timer.enable", NULL) != 2) {
 		return;
 	}
 
-	install_timer(&redraw_timer, LEDS_REFRESH_DELAY, redraw_leds, NULL);
-	/* The expired timer ID has now been erased.  */
+	delay = compute_redraw_interval();
+	if (delay)
+		install_timer(&redraw_timer, delay, redraw_leds, NULL);
 
 	if (drawing) return;
 	drawing = 1;
 
-	foreach (ses, sessions) {
+	foreach (term, terminals) {
+		struct session *ses;
+		struct window *win;
+		
+		if (list_empty(term->windows)) continue;
+		
+		win = get_current_tab(term);
+		assert(win);
+		ses = win->data;
+
+		update_download_led(ses);
 		if (!sync_leds(ses))
 			continue;
-		redraw_terminal(ses->tab->term);
+		redraw_terminal(term);
 		draw_leds(ses);
 	}
 	drawing = 0;
@@ -306,7 +399,7 @@ menu_leds_info(struct terminal *term, void *xxx, void *xxxx)
 		 msg_text(term, N_("What the different LEDs indicate:\n"
 		 	"\n"
 			"[SIJP--]\n"
-			" |||||`- Unused\n"
+			" |||||`- Download in progress\n"
 			" ||||`-- Unused\n"
 			" |||`--- A JavaScript pop-up window was blocked\n"
 			" ||`---- A JavaScript error has occurred\n"

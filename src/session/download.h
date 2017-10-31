@@ -111,6 +111,8 @@ struct type_query {
 	 * Elinks need not copy the file.  */
 	unsigned int cgi:1;
 
+	/** mailcap entry with copiousoutput */
+	unsigned int copiousoutput:1;
 	/* int frame; */
 };
 
@@ -121,7 +123,17 @@ struct file_download {
 	unsigned char *file;
 	unsigned char *external_handler;
 	struct session *ses;
+
+	/** The terminal in which message boxes about the download
+	 * should be displayed.  If this terminal is closed, then
+	 * detach_downloads_from_terminal() changes the pointer to
+	 * NULL, and get_default_terminal() will be used if a
+	 * terminal is needed later.  However, if the download has
+	 * an external handler, then detach_downloads_from_terminal()
+	 * aborts it right away; external handlers always run in the
+	 * original terminal, if anywhere.  */
 	struct terminal *term;
+
 	time_t remotetime;
 	off_t seek;
 	int handle;
@@ -130,7 +142,7 @@ struct file_download {
 	struct download download;
 
 	/** Should the file be deleted when destroying the structure */
-	unsigned int delete:1;
+	unsigned int delete_:1;
 
 	/** Should the download be stopped/interrupted when destroying the structure */
 	unsigned int stop:1;
@@ -138,6 +150,9 @@ struct file_download {
 	/** Whether to block the terminal when running the external handler. */
 	unsigned int block:1;
 
+	/** Mailcap entry with copiousoutput */
+	unsigned int copiousoutput:1;
+	
 	/** The current dialog for this download. Can be NULL. */
 	struct dialog_data *dlg_data;
 	struct listbox_item *box_item;

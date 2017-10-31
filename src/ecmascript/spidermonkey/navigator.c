@@ -44,13 +44,13 @@
 #include "viewer/text/vs.h"
 
 
-static JSBool navigator_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp);
+static JSBool navigator_get_property(JSContext *ctx, JSObject *obj, jsid id, jsval *vp);
 
 const JSClass navigator_class = {
 	"navigator",
 	JSCLASS_HAS_PRIVATE,
 	JS_PropertyStub, JS_PropertyStub,
-	navigator_get_property, JS_PropertyStub,
+	navigator_get_property, JS_StrictPropertyStub,
 	JS_EnumerateStub, JS_ResolveStub, JS_ConvertStub, JS_FinalizeStub
 };
 
@@ -81,14 +81,14 @@ const JSPropertySpec navigator_props[] = {
 
 /* @navigator_class.getProperty */
 static JSBool
-navigator_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+navigator_get_property(JSContext *ctx, JSObject *obj, jsid id, jsval *vp)
 {
-	if (!JSVAL_IS_INT(id))
+	if (!JSID_IS_INT(id))
 		return JS_TRUE;
 
 	undef_to_jsval(ctx, vp);
 
-	switch (JSVAL_TO_INT(id)) {
+	switch (JSID_TO_INT(id)) {
 	case JSP_NAVIGATOR_APP_CODENAME:
 		string_to_jsval(ctx, vp, "Mozilla"); /* More like a constant nowadays. */
 		break;
@@ -102,7 +102,7 @@ navigator_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 		break;
 	case JSP_NAVIGATOR_LANGUAGE:
 #ifdef CONFIG_NLS
-		if (get_opt_bool("protocol.http.accept_ui_language"))
+		if (get_opt_bool("protocol.http.accept_ui_language", NULL))
 			string_to_jsval(ctx, vp, language_to_iso639(current_language));
 
 #endif
@@ -113,15 +113,18 @@ navigator_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	case JSP_NAVIGATOR_USER_AGENT:
 	{
 		/* FIXME: Code duplication. */
-		unsigned char *optstr = get_opt_str("protocol.http.user_agent");
+		unsigned char *optstr = get_opt_str("protocol.http.user_agent",
+		                                    NULL);
 
 		if (*optstr && strcmp(optstr, " ")) {
 			unsigned char *ustr, ts[64] = "";
 			static unsigned char custr[256];
+			/* TODO: Somehow get the terminal in which the
+			 * document is actually being displayed.  */
+			struct terminal *term = get_default_terminal();
 
-			if (!list_empty(terminals)) {
+			if (term) {
 				unsigned int tslen = 0;
-				struct terminal *term = terminals.prev;
 
 				ulongcat(ts, &tslen, term->width, 3, 0);
 				ts[tslen++] = 'x';

@@ -22,6 +22,7 @@
 #include "document/css/css.h"
 #include "document/css/stylesheet.h"
 #include "document/html/frames.h"
+#include "document/html/parse-meta-refresh.h"
 #include "document/html/parser/link.h"
 #include "document/html/parser/stack.h"
 #include "document/html/parser/parse.h"
@@ -50,24 +51,30 @@
 
 /* TODO: This needs rewrite. Yes, no kidding. */
 
+static int
+extract_color(struct html_context *html_context, unsigned char *a,
+	      unsigned char *attribute, color_T *rgb)
+{
+	unsigned char *value;
+	int retval;
+
+	value = get_attr_val(a, attribute, html_context->doc_cp);
+	if (!value) return -1;
+
+	retval = decode_color(value, strlen(value), rgb);
+	mem_free(value);
+
+	return retval;
+}
 
 int
 get_color(struct html_context *html_context, unsigned char *a,
-	  unsigned char *c, color_T *rgb)
+	  unsigned char *attribute, color_T *rgb)
 {
-	unsigned char *at;
-	int r;
-
 	if (!use_document_fg_colors(html_context->options))
 		return -1;
 
-	at = get_attr_val(a, c, html_context->doc_cp);
-	if (!at) return -1;
-
-	r = decode_color(at, strlen(at), rgb);
-	mem_free(at);
-
-	return r;
+	return extract_color(html_context, a, attribute, rgb);
 }
 
 int
@@ -76,7 +83,7 @@ get_bgcolor(struct html_context *html_context, unsigned char *a, color_T *rgb)
 	if (!use_document_bg_colors(html_context->options))
 		return -1;
 
-	return get_color(html_context, a, "bgcolor", rgb);
+	return extract_color(html_context, a, "bgcolor", rgb);
 }
 
 unsigned char *
@@ -250,7 +257,7 @@ html_focusable(struct html_context *html_context, unsigned char *a)
 		mem_free(accesskey);
 	}
 
-	tabindex = get_num(a, "tabindex", html_context->doc_cp);
+	tabindex = get_num(a, "tabindex", cp);
 	if (0 < tabindex && tabindex < 32767) {
 		format.tabindex = (tabindex & 0x7fff) << 16;
 	}
@@ -271,175 +278,44 @@ html_skip(struct html_context *html_context, unsigned char *a)
 	html_top->type = ELEMENT_DONT_KILL;
 }
 
-#define LWS(c) ((c) == ' ' || (c) == ASCII_TAB)
-
-/* Parse meta refresh without URL= in it:
- *  <meta http-equiv="refresh" content="3,http://elinks.or.cz/">
- *  <meta http-equiv="refresh" content="3; http://elinks.or.cz/">
- *  <meta http-equiv="refresh" content="   3 ;   http://elinks.or.cz/    ">
- */
-static void
-parse_old_meta_refresh(unsigned char *str, unsigned char **ret)
-{
-	unsigned char *p = str;
-	int len;
-
-	assert(str && ret);
-	if_assert_failed return;
-
-	*ret = NULL;
-	while (*p && LWS(*p)) p++;
-	if (!*p) return;
-	while (*p && *p >= '0' && *p <= '9') p++;
-	if (!*p) return;
-	while (*p && LWS(*p)) p++;
-	if (!*p) return;
-	if (*p == ';' || *p == ',') p++; else return;
-	while (*p && LWS(*p)) p++;
-	if (!*p) return;
-
-	len = strlen(p);
-	while (len && LWS(p[len])) len--;
-	if (len) *ret = memacpy(p, len);
-}
-
-/* Search for the url part in the content attribute and returns
- * it if found.
- * It searches the first occurence of 'url' marker somewhere ignoring
- * anything before it.
- * It should cope with most situations including:
- * content="0; URL='http://www.site.com/path/xxx.htm'"
- * content="0  url=http://www.site.com/path/xxx.htm"
- * content="anything ; some url  ===   ''''http://www.site.com/path/xxx.htm''''
- *
- * The return value is one of:
- *
- * - HEADER_PARAM_FOUND: the parameter was found, copied, and stored in *@ret.
- * - HEADER_PARAM_NOT_FOUND: the parameter is not there.  *@ret is now NULL.
- * - HEADER_PARAM_OUT_OF_MEMORY: error. *@ret is now NULL.
- *
- * If @ret is NULL, then this function doesn't actually access *@ret,
- * and cannot fail with HEADER_PARAM_OUT_OF_MEMORY.  Some callers may
- * rely on this. */
-static enum parse_header_param
-search_for_url_param(unsigned char *str, unsigned char **ret)
-{
-	unsigned char *p;
-	int plen = 0;
-
-	if (ret) *ret = NULL;	/* default in case of early return */
-
-	assert(str);
-	if_assert_failed return HEADER_PARAM_NOT_FOUND;
-
-	/* Returns now if string @str is empty. */
-	if (!*str) return HEADER_PARAM_NOT_FOUND;
-
-	p = c_strcasestr(str, "url");
-	if (!p) return HEADER_PARAM_NOT_FOUND;
-	p += 3;
-
-	while (*p && (*p <= ' ' || *p == '=')) p++;
-	if (!*p) {
-		if (ret) {
-			*ret = stracpy("");
-			if (!*ret)
-				return HEADER_PARAM_OUT_OF_MEMORY;
-		}
-		return HEADER_PARAM_FOUND;
-	}
-
-	while ((p[plen] > ' ' || LWS(p[plen])) && p[plen] != ';') plen++;
-
-	/* Trim ending spaces */
-	while (plen > 0 && LWS(p[plen - 1])) plen--;
-
-	/* XXX: Drop enclosing single quotes if there's some.
-	 *
-	 * Some websites like newsnow.co.uk are using single quotes around url
-	 * in URL field in meta tag content attribute like this:
-	 * <meta http-equiv="Refresh" content="0; URL='http://www.site.com/path/xxx.htm'">
-	 *
-	 * This is an attempt to handle that, but it may break something else.
-	 * We drop all pair of enclosing quotes found (eg. '''url''' => url).
-	 * Please report any issue related to this. --Zas */
-	while (plen > 1 && *p == '\'' && p[plen - 1] == '\'') {
-		p++;
-		plen -= 2;
-	}
-
-	if (ret) {
-		*ret = memacpy(p, plen);
-		if (!*ret)
-			return HEADER_PARAM_OUT_OF_MEMORY;
-	}
-	return HEADER_PARAM_FOUND;
-}
-
-#undef LWS
-
 static void
 check_head_for_refresh(struct html_context *html_context, unsigned char *head)
 {
-	unsigned char *refresh, *url;
+	unsigned char *refresh;
+	unsigned char *url = NULL;
+	unsigned char *joined_url = NULL;
+	unsigned long seconds;
 
 	refresh = parse_header(head, "Refresh", NULL);
 	if (!refresh) return;
 
-	search_for_url_param(refresh, &url);
-	if (!url) {
-		/* Let's try a more tolerant parsing. */
-		parse_old_meta_refresh(refresh, &url);
+	if (html_parse_meta_refresh(refresh, &seconds, &url) == 0) {
 		if (!url) {
 			/* If the URL parameter is missing assume that the
 			 * document being processed should be refreshed. */
-			url = get_uri_string(html_context->base_href, URI_ORIGINAL);
+			url = get_uri_string(html_context->base_href,
+					     URI_ORIGINAL);
 		}
 	}
 
-	if (url) {
-		/* Extraction of refresh time. */
-		unsigned long seconds = 0;
-		int valid = 1;
+	if (url)
+		joined_url = join_urls(html_context->base_href, url);
 
-		/* We try to extract the refresh time, and to handle weird things
-		 * in an elegant way. Among things we can have negative values,
-		 * too big ones, just ';' (we assume 0 seconds in that case) and
-		 * more. */
-		if (*refresh != ';') {
-			if (isdigit(*refresh)) {
-				unsigned long max_seconds = HTTP_REFRESH_MAX_DELAY;
+	if (joined_url) {
+		if (seconds > HTTP_REFRESH_MAX_DELAY)
+			seconds = HTTP_REFRESH_MAX_DELAY;
 
-				errno = 0;
-				seconds = strtoul(refresh, NULL, 10);
-				if (errno == ERANGE || seconds > max_seconds) {
-					/* Too big refresh value, limit it. */
-					seconds = max_seconds;
-				} else if (errno) {
-					/* Bad syntax */
-					valid = 0;
-				}
-			} else {
-				/* May be a negative number, or some bad syntax. */
-				valid = 0;
-			}
-		}
+		html_focusable(html_context, NULL);
 
-		if (valid) {
-			unsigned char *joined_url = join_urls(html_context->base_href, url);
-
-			html_focusable(html_context, NULL);
-
+		if (get_opt_bool("document.browse.show_refresh_link", NULL)) {
 			put_link_line("Refresh: ", url, joined_url,
-			              html_context->options->framename, html_context);
-			html_context->special_f(html_context, SP_REFRESH, seconds, joined_url);
-
-			mem_free(joined_url);
+				      html_context->options->framename, html_context);
 		}
-
-		mem_free(url);
+		html_context->special_f(html_context, SP_REFRESH, seconds, joined_url);
 	}
 
+	mem_free_if(joined_url);
+	mem_free_if(url);
 	mem_free(refresh);
 }
 
@@ -451,7 +327,7 @@ check_head_for_cache_control(struct html_context *html_context,
 	int no_cache = 0;
 	time_t expires = 0;
 
-	if (get_opt_bool("document.cache.ignore_cache_control"))
+	if (get_opt_bool("document.cache.ignore_cache_control", NULL))
 		return;
 
 	/* XXX: Code duplication with HTTP protocol backend. */
@@ -460,18 +336,18 @@ check_head_for_cache_control(struct html_context *html_context,
 	 * if we already set max age to date mentioned in Expires.
 	 * --jonas */
 	if ((d = parse_header(head, "Pragma", NULL))) {
-		if (strstr(d, "no-cache")) {
+		if (strstr((const char *)d, "no-cache")) {
 			no_cache = 1;
 		}
 		mem_free(d);
 	}
 
 	if (!no_cache && (d = parse_header(head, "Cache-Control", NULL))) {
-		if (strstr(d, "no-cache") || strstr(d, "must-revalidate")) {
+		if (strstr((const char *)d, "no-cache") || strstr((const char *)d, "must-revalidate")) {
 			no_cache = 1;
 
 		} else  {
-			unsigned char *pos = strstr(d, "max-age=");
+			unsigned char *pos = strstr((const char *)d, "max-age=");
 
 			assert(!no_cache);
 
@@ -492,7 +368,7 @@ check_head_for_cache_control(struct html_context *html_context,
 
 	if (!no_cache && (d = parse_header(head, "Expires", NULL))) {
 		/* Convert date to seconds. */
-		if (strstr(d, "now")) {
+		if (strstr((const char *)d, "now")) {
 			timeval_T now;
 
 			timeval_now(&now);
@@ -773,7 +649,9 @@ get_image_map(unsigned char *head, unsigned char *pos, unsigned char *eof,
 	if (!init_string(&hd)) return -1;
 
 	if (head) add_to_string(&hd, head);
-	scan_http_equiv(pos, eof, &hd, NULL, options);
+	/* FIXME (bug 784): cp is the terminal charset;
+	 * should use the document charset instead.  */
+	scan_http_equiv(pos, eof, &hd, NULL, options->cp);
 	ct = get_convert_table(hd.source, to, def, NULL, NULL, hdef);
 	done_string(&hd);
 
@@ -882,7 +760,7 @@ init_html_parser(struct uri *uri, struct document_options *options,
 
 #ifdef CONFIG_CSS
 	html_context->css_styles.import = import_css_stylesheet;
-	init_list(html_context->css_styles.selectors);
+	init_css_selector_set(&html_context->css_styles.selectors);
 #endif
 
 	init_list(html_context->stack);
@@ -897,7 +775,9 @@ init_html_parser(struct uri *uri, struct document_options *options,
 
 	html_context->options = options;
 
-	scan_http_equiv(start, end, head, title, options);
+	/* FIXME (bug 784): cp is the terminal charset;
+	 * should use the document charset instead.  */
+	scan_http_equiv(start, end, head, title, options->cp);
 
 	e = mem_calloc(1, sizeof(*e));
 	if (!e) return NULL;
@@ -913,12 +793,12 @@ init_html_parser(struct uri *uri, struct document_options *options,
 	format.title = NULL;
 
 	format.style = options->default_style;
-	format.clink = options->default_link;
-	format.vlink = options->default_vlink;
+	format.color.clink = options->default_color.link;
+	format.color.vlink = options->default_color.vlink;
 #ifdef CONFIG_BOOKMARKS
-	format.bookmark_link = options->default_bookmark_link;
+	format.color.bookmark_link = options->default_color.bookmark_link;
 #endif
-	format.image_link = options->default_image_link;
+	format.color.image_link = options->default_color.image_link;
 
 	par_format.align = ALIGN_LEFT;
 	par_format.leftmargin = options->margin;
@@ -927,9 +807,9 @@ init_html_parser(struct uri *uri, struct document_options *options,
 	par_format.width = options->box.width;
 	par_format.list_level = par_format.list_number = 0;
 	par_format.dd_margin = options->margin;
-	par_format.flags = P_NONE;
+	par_format.flags = P_DISC;
 
-	par_format.bgcolor = options->default_style.bg;
+	par_format.color.background = options->default_style.color.background;
 
 	html_top->invisible = 0;
 	html_top->name = NULL;

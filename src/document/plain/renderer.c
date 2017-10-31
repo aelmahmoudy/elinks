@@ -5,6 +5,7 @@
 #endif
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "elinks.h"
@@ -43,7 +44,7 @@ struct plain_renderer {
 	struct conv_table *convert_table;
 
 	/* The default template char data for text */
-	struct screen_char template;
+	struct screen_char template_;
 
 	/* The maximum width any line can have (used for wrapping text) */
 	int max_width;
@@ -93,8 +94,8 @@ add_document_link(struct document *document, unsigned char *uri, int length,
 	link->npoints = length;
 	link->type = LINK_HYPERTEXT;
 	link->where = uri;
-	link->color.background = document->options.default_style.bg;
-	link->color.foreground = document->options.default_link;
+	link->color.background = document->options.default_style.color.background;
+	link->color.foreground = document->options.default_color.link;
 	link->number = document->nlinks;
 
 	for (point = link->points; length > 0; length--, point++, x++) {
@@ -186,7 +187,7 @@ print_document_link(struct plain_renderer *renderer, int lineno,
 	int link_end = line_pos + len;
 	unsigned char saved_char;
 	struct document_options *doc_opts = &document->options;
-	struct screen_char template = renderer->template;
+	struct screen_char template_ = renderer->template_;
 	int i;
 
 	if (!len) return 0;
@@ -203,28 +204,109 @@ print_document_link(struct plain_renderer *renderer, int lineno,
 		; /* Shut up compiler */
 #ifdef CONFIG_GLOBHIST
 	else if (get_global_history_item(start))
-		new_link->color.foreground = doc_opts->default_vlink;
+		new_link->color.foreground = doc_opts->default_color.vlink;
 #endif
 #ifdef CONFIG_BOOKMARKS
 	else if (get_bookmark(start))
-		new_link->color.foreground = doc_opts->default_bookmark_link;
+		new_link->color.foreground = doc_opts->default_color.bookmark_link;
 #endif
 	else
-		new_link->color.foreground = doc_opts->default_link;
+		new_link->color.foreground = doc_opts->default_color.link;
 
 	line[link_end] = saved_char;
 
-	new_link->color.background = doc_opts->default_style.bg;
+	new_link->color.background = doc_opts->default_style.color.background;
 
-	set_term_color(&template, &new_link->color,
+	set_term_color(&template_, &new_link->color,
 		       doc_opts->color_flags, doc_opts->color_mode);
 
 	for (i = len; i; i--) {
-		template.data = line[line_pos++];
-		copy_screen_chars(pos++, &template, 1);
+		template_.data = line[line_pos++];
+		copy_screen_chars(pos++, &template_, 1);
 	}
 
 	return len;
+}
+
+static void
+decode_esc_color(unsigned char *text, int *line_pos, int width,
+		 struct screen_char *template_, enum color_mode mode,
+		 int *was_reversed)
+{
+	struct screen_char ch;
+	struct color_pair color;
+	char *buf, *tail, *begin, *end;
+	int k, foreground, background, f1, b1; /* , intensity; */
+
+	++(*line_pos);
+	buf = (char *)&text[*line_pos];
+
+	if (*buf != '[') return;
+	++buf;
+	++(*line_pos);
+	
+	k = strspn(buf, "0123456789;");
+	*line_pos += k;
+	if (!k || buf[k] != 'm')  return;
+	
+	end = buf + k;
+	begin = tail = buf;
+
+	get_screen_char_color(template_, &color, 0, mode);
+	set_term_color(&ch, &color, 0, COLOR_MODE_16);
+	b1 = background = (ch.c.color[0] >> 4) & 7;
+	f1 = foreground = ch.c.color[0] & 15;
+	
+	while (tail < end) {
+		unsigned char kod = (unsigned char)strtol(begin, &tail, 10);
+
+		begin = tail + 1;
+		switch (kod) {
+		case 0:
+			background = 0;
+			foreground = 7;
+			break;
+		case 7:
+			if (*was_reversed == 0) {
+				background = f1 & 7;
+				foreground = b1;
+				*was_reversed = 1;
+			}
+			break;
+		case 27:
+			if (*was_reversed == 1) {
+				background = f1 & 7;
+				foreground = b1;
+				*was_reversed = 0;
+			}
+			break;
+		case 30:
+		case 31:
+		case 32:
+		case 33:
+		case 34:
+		case 35:
+		case 36:
+		case 37:
+			foreground = kod - 30;
+			break;
+		case 40:
+		case 41:
+		case 42:
+		case 43:
+		case 44:
+		case 45:
+		case 46:
+		case 47:	
+			background = kod - 40;
+			break;
+		default:
+			break;
+		}
+	}
+	color.background = get_term_color16(background);
+	color.foreground = get_term_color16(foreground);
+	set_term_color(template_, &color, 0, mode);
 }
 
 static inline int
@@ -232,11 +314,14 @@ add_document_line(struct plain_renderer *renderer,
 		  unsigned char *line, int line_width)
 {
 	struct document *document = renderer->document;
-	struct screen_char *template = &renderer->template;
-	struct screen_char saved_renderer_template = *template;
+	struct screen_char *template_ = &renderer->template_;
+	struct screen_char saved_renderer_template = *template_;
 	struct screen_char *pos, *startpos;
+	struct document_options *doc_opts = &document->options;
+	int was_reversed = 0;
+
 #ifdef CONFIG_UTF8
-	int utf8 = document->options.utf8;
+	int utf8 = doc_opts->utf8;
 #endif /* CONFIG_UTF8 */
 	int cells = 0;
 	int lineno = renderer->lineno;
@@ -342,12 +427,12 @@ add_document_line(struct plain_renderer *renderer,
 
 			expanded += tab_width;
 
-			template->data = ' ';
+			template_->data = ' ';
 			do
-				copy_screen_chars(pos++, template, 1);
+				copy_screen_chars(pos++, template_, 1);
 			while (tab_width--);
 
-			*template = saved_renderer_template;
+			*template_ = saved_renderer_template;
 
 		} else if (line_char == ASCII_BS) {
 			if (!(expanded + cells)) {
@@ -390,27 +475,32 @@ add_document_line(struct plain_renderer *renderer,
 				    && (pos - 1)->attr) {
 					/* There is some preceding text,
 					 * and it has an attribute; copy it */
-					template->attr |= (pos - 1)->attr;
+					template_->attr |= (pos - 1)->attr;
 				} else {
 					/* Default to bold; seems more useful
 					 * than underlining the underscore */
-					template->attr |= SCREEN_ATTR_BOLD;
+					template_->attr |= SCREEN_ATTR_BOLD;
 				}
 
 			} else if (pos->data == '_') {
 				/* Underline _^Hx */
 
-				template->attr |= SCREEN_ATTR_UNDERLINE;
+				template_->attr |= SCREEN_ATTR_UNDERLINE;
 
 			} else if (pos->data == next_char) {
 				/* Embolden x^Hx */
 
-				template->attr |= SCREEN_ATTR_BOLD;
+				template_->attr |= SCREEN_ATTR_BOLD;
 			}
 
 			/* Handle _^Hx^Hx as both bold and underlined */
-			if (template->attr)
-				template->attr |= pos->attr;
+			if (template_->attr)
+				template_->attr |= pos->attr;
+		} else if (line_char == 27) {
+			decode_esc_color(line, &line_pos, width,
+					 &saved_renderer_template,
+					 doc_opts->color_mode, &was_reversed);
+			*template_ = saved_renderer_template;
 		} else {
 			int added_chars = 0;
 
@@ -441,21 +531,21 @@ add_document_line(struct plain_renderer *renderer,
 						continue;
 					}
 
-					template->data = (unicode_val_T)data;
-					copy_screen_chars(pos++, template, 1);
+					template_->data = (unicode_val_T)data;
+					copy_screen_chars(pos++, template_, 1);
 
 					if (cell == 2) {
-						template->data = UCS_NO_CHAR;
+						template_->data = UCS_NO_CHAR;
 						copy_screen_chars(pos++,
-								  template, 1);
+								  template_, 1);
 					}
 				} else
 #endif /* CONFIG_UTF8 */
 				{
 					if (!isscreensafe(line_char))
 						line_char = '.';
-					template->data = line_char;
-					copy_screen_chars(pos++, template, 1);
+					template_->data = line_char;
+					copy_screen_chars(pos++, template_, 1);
 
 					/* Detect copy of nul chars to screen,
 					 * this should not occur. --Zas */
@@ -463,7 +553,7 @@ add_document_line(struct plain_renderer *renderer,
 				}
 			}
 
-			*template = saved_renderer_template;
+			*template_ = saved_renderer_template;
 		}
 next:
 		line_pos += charlen;
@@ -477,9 +567,9 @@ next:
 }
 
 static void
-init_template(struct screen_char *template, struct document_options *options)
+init_template(struct screen_char *template_, struct document_options *options)
 {
-	get_screen_char_template(template, options, options->default_style);
+	get_screen_char_template(template_, options, options->default_style);
 }
 
 static struct node *
@@ -637,14 +727,14 @@ render_plain_document(struct cache_entry *cached, struct document *document,
 	renderer.max_width = document->options.wrap ? document->options.box.width
 						    : INT_MAX;
 
-	document->bgcolor = document->options.default_style.bg;
+	document->color.background = document->options.default_style.color.background;
 	document->width = 0;
 #ifdef CONFIG_UTF8
 	document->options.utf8 = is_cp_utf8(document->options.cp);
 #endif /* CONFIG_UTF8 */
 
 	/* Setup the style */
-	init_template(&renderer.template, &document->options);
+	init_template(&renderer.template_, &document->options);
 
 	add_document_lines(&renderer);
 }

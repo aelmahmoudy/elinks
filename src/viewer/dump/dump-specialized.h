@@ -29,16 +29,16 @@ DUMP_FUNCTION_SPECIALIZED(struct document *document, struct dump_output *out)
 	int y;
 #ifdef DUMP_COLOR_MODE_16
 	unsigned char color = 0;
-	const int width = get_opt_int("document.dump.width");
+	const int width = get_opt_int("document.dump.width", NULL);
 #elif defined(DUMP_COLOR_MODE_256)
 	unsigned char foreground = 0;
 	unsigned char background = 0;
-	const int width = get_opt_int("document.dump.width");
+	const int width = get_opt_int("document.dump.width", NULL);
 #elif defined(DUMP_COLOR_MODE_TRUE)
 	static const unsigned char color[6] = {255, 255, 255, 0, 0, 0};
 	const unsigned char *foreground = &color[0];
 	const unsigned char *background = &color[3];
-	const int width = get_opt_int("document.dump.width");
+	const int width = get_opt_int("document.dump.width", NULL);
 #endif	/* DUMP_COLOR_MODE_TRUE */
 
 	for (y = 0; y < document->height; y++) {
@@ -68,17 +68,17 @@ DUMP_FUNCTION_SPECIALIZED(struct document *document, struct dump_output *out)
 				= document->data[y].chars[x].attr;
 #ifdef DUMP_COLOR_MODE_16
 			const unsigned char color1
-				= document->data[y].chars[x].color[0];
+				= document->data[y].chars[x].c.color[0];
 #elif defined(DUMP_COLOR_MODE_256)
 			const unsigned char color1
-				= document->data[y].chars[x].color[0];
+				= document->data[y].chars[x].c.color[0];
 			const unsigned char color2
-				= document->data[y].chars[x].color[1];
+				= document->data[y].chars[x].c.color[1];
 #elif defined(DUMP_COLOR_MODE_TRUE)
 			const unsigned char *const new_foreground
-				= &document->data[y].chars[x].color[0];
+				= &document->data[y].chars[x].c.color[0];
 			const unsigned char *const new_background
-				= &document->data[y].chars[x].color[3];
+				= &document->data[y].chars[x].c.color[3];
 #endif	/* DUMP_COLOR_MODE_TRUE */
 
 			c = document->data[y].chars[x].data;
@@ -126,8 +126,8 @@ DUMP_FUNCTION_SPECIALIZED(struct document *document, struct dump_output *out)
 #endif	/* DUMP_COLOR_MODE_TRUE */
 
 			if ((attr & SCREEN_ATTR_FRAME)
-			    && c >= 176 && c < 224)
-				c = frame_dumb[c - 176];
+			    && c >= FRAME_CHARS_BEGIN && c < FRAME_CHARS_END)
+				c = out->frame[c - FRAME_CHARS_BEGIN];
 
 #ifdef DUMP_CHARSET_UTF8
 			if (!isscreensafe_ucs(c)) c = ' ';

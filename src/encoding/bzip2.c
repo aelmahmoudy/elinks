@@ -31,11 +31,13 @@ struct bz2_enc_data {
 	/* The file descriptor from which we read.  */
 	int fdread;
 
-	/** Error code to be returned by all later bzip2_read() calls.
-	 * ::READENC_EAGAIN is used here as a passive value that means
-	 * no such error occurred yet.  ::READENC_ERRNO is not allowed
-	 * because there is no @c sticky_errno member here.  */
-	enum read_encoded_result sticky_result;
+	/* Initially 0; set to 1 when BZ2_bzDecompress indicates
+	 * BZ_STREAM_END, which means it has found the bzip2-specific
+	 * end-of-stream marker and all data has been decompressed.
+	 * Then we neither read from the file nor call BZ2_bzDecompress
+	 * any more.  */
+	int last_read:1;
+	int after_end:1;
 
 	/* A buffer for data that has been read from the file but not
 	 * yet decompressed.  fbz_stream.next_in and fbz_stream.avail_in
@@ -64,7 +66,8 @@ bzip2_open(struct stream_encoded *stream, int fd)
 	 * will be initialized on demand by bzip2_read.  */
 	copy_struct(&data->fbz_stream, &null_bz_stream);
 	data->fdread = fd;
-	data->sticky_result = READENC_EAGAIN;
+	data->last_read = 0;
+	data->after_end = 0;
 
 	err = BZ2_bzDecompressInit(&data->fbz_stream, 0, 0);
 	if (err != BZ_OK) {
@@ -77,64 +80,34 @@ bzip2_open(struct stream_encoded *stream, int fd)
 	return 0;
 }
 
-static enum read_encoded_result
-map_bzip2_ret(int ret)
-{
-	switch (ret) {
-	case BZ_STREAM_END:
-		return READENC_STREAM_END;
-	case BZ_DATA_ERROR:
-	case BZ_DATA_ERROR_MAGIC:
-		return READENC_DATA_ERROR;
-	case BZ_UNEXPECTED_EOF:
-		return READENC_UNEXPECTED_EOF;
-	case BZ_IO_ERROR:
-		return READENC_ERRNO;
-	case BZ_MEM_ERROR:
-		return READENC_MEM_ERROR;
-	case BZ_RUN_OK: /* not possible in decompression */
-	case BZ_FLUSH_OK: /* likewise */
-	case BZ_FINISH_OK: /* likewise */
-	case BZ_OUTBUFF_FULL: /* only for BuffToBuff functions */
-	case BZ_CONFIG_ERROR:
-	case BZ_SEQUENCE_ERROR:
-	case BZ_PARAM_ERROR:
-	default:
-		return READENC_INTERNAL;
-	}
-}
-
 static int
 bzip2_read(struct stream_encoded *stream, unsigned char *buf, int len)
 {
 	struct bz2_enc_data *data = (struct bz2_enc_data *) stream->data;
 	int err = 0;
-	int l = 0;
 
-	if (!data) return READENC_INTERNAL;
+	if (!data) return -1;
 
 	assert(len > 0);
-	if_assert_failed return READENC_INTERNAL;
 
-	if (data->sticky_result != READENC_EAGAIN)
-		return data->sticky_result;
+	if (data->last_read) return 0;
 
 	data->fbz_stream.avail_out = len;
 	data->fbz_stream.next_out = buf;
 
 	do {
 		if (data->fbz_stream.avail_in == 0) {
-			l = safe_read(data->fdread, data->buf,
-				      ELINKS_BZ_BUFFER_LENGTH);
+			int l = safe_read(data->fdread, data->buf,
+			                  ELINKS_BZ_BUFFER_LENGTH);
 
 			if (l == -1) {
 				if (errno == EAGAIN)
 					break;
 				else
-					return READENC_ERRNO; /* I/O error */
+					return -1; /* I/O error */
 			} else if (l == 0) {
 				/* EOF. It is error: we wait for more bytes */
-				return READENC_UNEXPECTED_EOF;
+				return -1;
 			}
 
 			data->fbz_stream.next_in = data->buf;
@@ -143,19 +116,15 @@ bzip2_read(struct stream_encoded *stream, unsigned char *buf, int len)
 
 		err = BZ2_bzDecompress(&data->fbz_stream);
 		if (err == BZ_STREAM_END) {
-			data->sticky_result = READENC_STREAM_END;
+			data->last_read = 1;
 			break;
 		} else if (err != BZ_OK) {
-			return map_bzip2_ret(err);
+			return -1;
 		}
 	} while (data->fbz_stream.avail_out > 0);
 
-	l = len - data->fbz_stream.avail_out;
-	assert(l == data->fbz_stream.next_out - (char *) buf);
-	if (l > 0) /* Positive return values are byte counts */
-		return l;
-	else	   /* and others are from enum read_encoded_result */
-		return data->sticky_result;
+	assert(len - data->fbz_stream.avail_out == data->fbz_stream.next_out - (char *) buf);
+	return len - data->fbz_stream.avail_out;
 }
 
 #ifdef CONFIG_SMALL
@@ -165,31 +134,30 @@ bzip2_read(struct stream_encoded *stream, unsigned char *buf, int len)
 #endif
 
 static unsigned char *
-bzip2_decode_buffer(unsigned char *data, int len, int *new_len)
+bzip2_decode_buffer(struct stream_encoded *st, unsigned char *data, int len, int *new_len)
 {
-	bz_stream stream;
+	struct bz2_enc_data *enc_data = (struct bz2_enc_data *)st->data;
+	bz_stream *stream = &enc_data->fbz_stream;
 	unsigned char *buffer = NULL;
 	int error;
 
 	*new_len = 0;	  /* default, left there if an error occurs */
 
-	memset(&stream, 0, sizeof(bz_stream));
-	stream.next_in = data;
-	stream.avail_in = len;
-
-	if (BZ2_bzDecompressInit(&stream, 0, BZIP2_SMALL) != BZ_OK)
-		return NULL;
+	stream->next_in = data;
+	stream->avail_in = len;
+	stream->total_out_lo32 = 0;
+	stream->total_out_hi32 = 0;
 
 	do {
 		unsigned char *new_buffer;
-		size_t size = stream.total_out_lo32 + MAX_STR_LEN;
+		size_t size = stream->total_out_lo32 + MAX_STR_LEN;
 
 		/* FIXME: support for 64 bit.  real size is
 		 *
 		 * 	(total_in_hi32 << * 32) + total_in_lo32
 		 *
 		 * --jonas */
-		assertm(!stream.total_out_hi32, "64 bzip2 decoding not supported");
+		assertm(!stream->total_out_hi32, "64 bzip2 decoding not supported");
 
 		new_buffer = mem_realloc(buffer, size);
 		if (!new_buffer) {
@@ -198,12 +166,11 @@ bzip2_decode_buffer(unsigned char *data, int len, int *new_len)
 		}
 
 		buffer		 = new_buffer;
-		stream.next_out  = buffer + stream.total_out_lo32;
-		stream.avail_out = MAX_STR_LEN;
+		stream->next_out  = buffer + stream->total_out_lo32;
+		stream->avail_out = MAX_STR_LEN;
 
-		error = BZ2_bzDecompress(&stream);
+		error = BZ2_bzDecompress(stream);
 		if (error == BZ_STREAM_END) {
-			error = BZ_OK;
 			break;
 		}
 
@@ -211,15 +178,19 @@ bzip2_decode_buffer(unsigned char *data, int len, int *new_len)
 		 * is reached. At least lindi- reported that it caused a
 		 * reproducable infinite loop. Maybe it has to do with decoding
 		 * an incomplete file. */
-	} while (error == BZ_OK && stream.avail_in > 0);
+	} while (error == BZ_OK && stream->avail_in > 0);
 
-	BZ2_bzDecompressEnd(&stream);
+	if (error == BZ_STREAM_END) {
+		BZ2_bzDecompressEnd(stream);
+		enc_data->after_end = 1;
+		error = BZ_OK;
+	}
 
 	if (error == BZ_OK) {
-		*new_len = stream.total_out_lo32;
+		*new_len = stream->total_out_lo32;
 		return buffer;
 	} else {
-		if (buffer) mem_free(buffer);
+		mem_free_if(buffer);
 		return NULL;
 	}
 }
@@ -230,8 +201,12 @@ bzip2_close(struct stream_encoded *stream)
 	struct bz2_enc_data *data = (struct bz2_enc_data *) stream->data;
 
 	if (data) {
-		BZ2_bzDecompressEnd(&data->fbz_stream);
-		close(data->fdread);
+		if (!data->after_end) {
+			BZ2_bzDecompressEnd(&data->fbz_stream);
+		}
+		if (data->fdread != -1) {
+			close(data->fdread);
+		}
 		mem_free(data);
 		stream->data = 0;
 	}

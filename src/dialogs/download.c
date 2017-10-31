@@ -61,6 +61,15 @@ dlg_set_notify(struct dialog_data *dlg_data, struct widget_data *widget_data)
 	struct file_download *file_download = dlg_data->dlg->udata;
 
 	file_download->notify = 1;
+	/* The user of this terminal wants to be notified about the
+	 * download.  Make this also the terminal where the
+	 * notification appears.  However, keep the original terminal
+	 * for external handlers, because the handler may have been
+	 * chosen based on the environment variables (usually TERM or
+	 * DISPLAY) of the ELinks process in that terminal.  */
+	if (!file_download->external_handler)
+		file_download->term = dlg_data->win->term;
+
 #if CONFIG_BITTORRENT
 	if (file_download->uri->protocol == PROTOCOL_BITTORRENT)
 		set_bittorrent_notify_on_completion(&file_download->download,
@@ -85,7 +94,7 @@ push_delete_button(struct dialog_data *dlg_data, struct widget_data *widget_data
 {
 	struct file_download *file_download = dlg_data->dlg->udata;
 
-	file_download->delete = 1;
+	file_download->delete_ = 1;
 #if CONFIG_BITTORRENT
 	if (file_download->uri->protocol == PROTOCOL_BITTORRENT)
 		set_bittorrent_files_for_deletion(&file_download->download);
@@ -135,7 +144,7 @@ download_dialog_layouter(struct dialog_data *dlg_data)
 			  && (show_meter || is_in_state(download->state, S_RESUME)));
 #endif
 
-	redraw_below_window(dlg_data->win);
+	redraw_windows(REDRAW_BEHIND_WINDOW, dlg_data->win);
 	file_download->dlg_data = dlg_data;
 
 	if (!msg) return;
@@ -157,7 +166,7 @@ download_dialog_layouter(struct dialog_data *dlg_data)
 		int_lower_bound(&w, DOWN_DLG_MIN);
 	}
 
-	dlg_format_text_do(term, url, 0, &y, w, &rw,
+	dlg_format_text_do(dlg_data, url, 0, &y, w, &rw,
 			dialog_text_color, ALIGN_LEFT, 1);
 
 	y++;
@@ -166,11 +175,11 @@ download_dialog_layouter(struct dialog_data *dlg_data)
 #if CONFIG_BITTORRENT
 	if (bittorrent) y += 2;
 #endif
-	dlg_format_text_do(term, msg, 0, &y, w, &rw,
+	dlg_format_text_do(dlg_data, msg, 0, &y, w, &rw,
 			dialog_text_color, ALIGN_LEFT, 1);
 
 	y++;
-	dlg_format_buttons(term, dlg_data->widgets_data,
+	dlg_format_buttons(dlg_data, dlg_data->widgets_data,
 			   dlg_data->number_of_widgets, 0, &y, w,
 			   &rw, ALIGN_CENTER, 1);
 
@@ -190,7 +199,7 @@ download_dialog_layouter(struct dialog_data *dlg_data)
 
 	y = dlg_data->box.y + DIALOG_TB + 1;
 	x = dlg_data->box.x + DIALOG_LB;
-	dlg_format_text_do(term, url, x, &y, w, NULL,
+	dlg_format_text_do(dlg_data, url, x, &y, w, NULL,
 			dialog_text_color, ALIGN_LEFT, 0);
 
 	if (show_meter) {
@@ -207,11 +216,11 @@ download_dialog_layouter(struct dialog_data *dlg_data)
 	}
 #endif
 	y++;
-	dlg_format_text_do(term, msg, x, &y, w, NULL,
+	dlg_format_text_do(dlg_data, msg, x, &y, w, NULL,
 			dialog_text_color, ALIGN_LEFT, 0);
 
 	y++;
-	dlg_format_buttons(term, dlg_data->widgets_data,
+	dlg_format_buttons(dlg_data, dlg_data->widgets_data,
 			   dlg_data->number_of_widgets, x, &y, w,
 			   NULL, ALIGN_CENTER, 0);
 

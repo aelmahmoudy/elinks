@@ -41,7 +41,8 @@ get_listbox_widget_data(struct widget_data *widget_data)
 
 /* Layout for generic boxes */
 void
-dlg_format_listbox(struct terminal *term, struct widget_data *widget_data,
+dlg_format_listbox(struct dialog_data *dlg_data,
+		   struct widget_data *widget_data,
 	           int x, int *y, int w, int max_height, int *rw,
 	           enum format_align align, int format_only)
 {
@@ -51,7 +52,7 @@ dlg_format_listbox(struct terminal *term, struct widget_data *widget_data,
 
 	/* This is only weird heuristic, it could scale well I hope. */
 	optimal_h = max_height * 7 / 10 - VERTICAL_LISTBOX_MARGIN;
-	min = get_opt_int("ui.dialogs.listbox_min_height");
+	min = get_opt_int("ui.dialogs.listbox_min_height", NULL);
 
 	if (max_height - VERTICAL_LISTBOX_MARGIN < min) {
 		/* Big trouble: can't satisfy even the minimum :-(. */
@@ -400,18 +401,26 @@ display_listbox_item(struct listbox_item *item, void *data_, int *offset)
 		case BI_LEAF:
 		case BI_SEPARATOR:
 		{
-			struct listbox_item *root = data->box->ops->get_root(item);
+			const struct listbox_item *prev;
 
-			if (root) {
-				if (item == root->child.prev) {
-					str[1] = BORDER_SDLCORNER;
-				}
+			prev = traverse_listbox_items_list(item, data->box,
+			                                   -1, 1, NULL, NULL);
+
+			if (item == prev) {
+				/* There is no visible item before @item, so it
+				 * must be the first item in the listbox. */
+				str[1] = BORDER_SULCORNER;
 			} else {
-				LIST_OF(struct listbox_item) *p = data->box->items;
+				const struct listbox_item *next;
 
-				if (p->next == item) {
-					str[1] = BORDER_SULCORNER;
-				} else if (p->prev == item) {
+				next = traverse_listbox_items_list(item,
+				                  data->box, 1, 1, NULL, NULL);
+
+				if (item == next
+				    || item->depth != next->depth) {
+					/* There is no visible item after @item
+					 * at the same depth, so it must be the
+					 * last in its folder. */
 					str[1] = BORDER_SDLCORNER;
 				}
 			}
@@ -693,7 +702,7 @@ do_kbd_listbox_action(enum menu_action action_id, struct dialog_data *dlg_data,
 
 			box = get_listbox_widget_data(dlg_item);
 			if (box->ops
-			    && box->ops->delete
+			    && box->ops->delete_
 			    && box->ops->can_delete)
 				push_hierbox_delete_button(dlg_data,
 							   widget_data);

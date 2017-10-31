@@ -55,6 +55,9 @@ get_download_msg(struct download *download, struct terminal *term,
 	    && download->conn->uri->protocol == PROTOCOL_BITTORRENT)
 		return get_bittorrent_message(download, term, wide, full, separator);
 #endif
+	if (download->conn && download->conn->http_upload_progress)
+		return get_upload_progress_msg(download->conn->http_upload_progress,
+						term, wide, full, separator);
 
 	return get_progress_msg(download->progress, term, wide, full, separator);
 }
@@ -64,15 +67,16 @@ get_download_msg(struct download *download, struct terminal *term,
 void
 update_status(void)
 {
-	int show_title_bar = get_opt_bool("ui.show_title_bar");
-	int show_status_bar = get_opt_bool("ui.show_status_bar");
-	int show_tabs_bar = get_opt_int("ui.tabs.show_bar");
-	int show_tabs_bar_at_top = get_opt_bool("ui.tabs.top");
+	int show_title_bar = get_opt_bool("ui.show_title_bar", NULL);
+	int show_status_bar = get_opt_bool("ui.show_status_bar", NULL);
+	int show_tabs_bar = get_opt_int("ui.tabs.show_bar", NULL);
+	int show_tabs_bar_at_top = get_opt_bool("ui.tabs.top", NULL);
 #ifdef CONFIG_LEDS
-	int show_leds = get_opt_bool("ui.leds.enable");
+	int show_leds = get_opt_bool("ui.leds.enable", NULL);
 #endif
-	int set_window_title = get_opt_bool("ui.window_title");
-	int insert_mode = get_opt_bool("document.browse.forms.insert_mode");
+	int set_window_title = get_opt_bool("ui.window_title", NULL);
+	int insert_mode = get_opt_bool("document.browse.forms.insert_mode",
+	                               NULL);
 	struct session *ses;
 	int tabs_count = 1;
 	struct terminal *term = NULL;
@@ -116,7 +120,6 @@ update_status(void)
 #ifdef CONFIG_LEDS
 		if (status->show_leds != show_leds) {
 			status->show_leds = show_leds;
-			dirty = 1;
 		}
 #endif
 
@@ -228,6 +231,7 @@ display_status_bar(struct session *ses, struct terminal *term, int tabs_count)
 				}
 			}
 		}
+
 
 		if (!msg) {
 			int full = term->width > 130;
@@ -399,7 +403,7 @@ display_title_bar(struct session *ses, struct terminal *term)
 	int height;
 
 	/* Clear the old title */
-	if (!get_opt_bool("ui.show_menu_bar_always")) {
+	if (!get_opt_bool("ui.show_menu_bar_always", NULL)) {
 		struct box box;
 
 		set_box(&box, 0, 0, term->width, 1);
@@ -572,5 +576,5 @@ print_screen_status(struct session *ses)
 		display_tab_bar(ses, term, tabs_count);
 	}
 
-	redraw_from_window(ses->tab);
+	redraw_windows(REDRAW_IN_FRONT_OF_WINDOW, ses->tab);
 }

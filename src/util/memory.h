@@ -20,10 +20,6 @@
 #include <sys/types.h>
 #include <stddef.h>
 
-#ifdef CONFIG_GC
-#include <gc.h>
-#endif
-
 #ifdef HAVE_MMAP
 void *mem_mmap_alloc(size_t size);
 void mem_mmap_free(void *p, size_t size);
@@ -66,20 +62,10 @@ void *mem_realloc(void *, size_t);
  * For these we need some replacement functions.
  * This should not be an issue on most modern systems.
  */
-#ifdef CONFIG_GC
-# define mem_alloc(size) GC_MALLOC(size)
-# define mem_calloc(count, size) GC_MALLOC((count) * (size))
-# define mem_free(p) (p) = NULL
-# define mem_realloc(p, size) GC_REALLOC(p, size)
-
-#else
-
 # define mem_alloc(size) malloc(size)
 # define mem_calloc(count, size) calloc(count, size)
 # define mem_free(p) free(p)
 # define mem_realloc(p, size) realloc(p, size)
-
-#endif
 
 /* fmem_* functions should be use for allocation and freeing of memory
  * inside a function.
@@ -126,9 +112,9 @@ mem_align_alloc__(
 #ifdef DEBUG_MEMLEAK
 		  const unsigned char *file, int line,
 #endif
-		  void **ptr, size_t old, size_t new, size_t objsize, size_t mask)
+		  void **ptr, size_t old, size_t new_, size_t objsize, size_t mask)
 {
-	size_t newsize = ALIGN_MEMORY_SIZE(new, mask);
+	size_t newsize = ALIGN_MEMORY_SIZE(new_, mask);
 	size_t oldsize = ALIGN_MEMORY_SIZE(old, mask);
 
 	if (newsize > oldsize) {
@@ -152,11 +138,11 @@ mem_align_alloc__(
 }
 
 #ifdef DEBUG_MEMLEAK
-#define mem_align_alloc(ptr, old, new, mask) \
-	mem_align_alloc__(__FILE__, __LINE__, (void **) ptr, old, new, sizeof(**ptr), mask)
+#define mem_align_alloc(ptr, old, new_, mask) \
+	mem_align_alloc__(__FILE__, __LINE__, (void **) ptr, old, new_, sizeof(**ptr), mask)
 #else
-#define mem_align_alloc(ptr, old, new, mask) \
-	mem_align_alloc__((void **) ptr, old, new, sizeof(**ptr), mask)
+#define mem_align_alloc(ptr, old, new_, mask) \
+	mem_align_alloc__((void **) ptr, old, new_, sizeof(**ptr), mask)
 #endif
 
 /** @} */

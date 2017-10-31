@@ -34,7 +34,7 @@
 static void
 disable_success_msgbox(void *dummy)
 {
-	get_opt_bool("ui.success_msgbox") = 0;
+	get_opt_bool("ui.success_msgbox", NULL) = 0;
 	option_changed(NULL, get_opt_rec(config_options, "ui.success_msgbox"));
 }
 
@@ -47,7 +47,7 @@ write_config_dialog(struct terminal *term, unsigned char *config_file,
 	unsigned char *strerr;
 
 	if (secsave_error == SS_ERR_NONE && !stdio_error) {
-		if (!get_opt_bool("ui.success_msgbox")) return;
+		if (!get_opt_bool("ui.success_msgbox", NULL)) return;
 
 		msg_box(term, NULL, MSGBOX_FREE_TEXT,
 			N_("Write config success"), ALIGN_CENTER,
@@ -209,8 +209,8 @@ match_option(struct listbox_item *item, struct terminal *term,
 	if (option->type == OPT_TREE)
 		return LISTBOX_MATCH_IMPOSSIBLE;
 
-	if (strcasestr(option->name, text)
-	    || (option->capt && strcasestr(_(option->capt, term), text)))
+	if (strcasestr((const char *)option->name, (const char *)text)
+	    || (option->capt && strcasestr((const char *)_(option->capt, term), (const char *)text)))
 		return LISTBOX_MATCH_OK;
 
 	return LISTBOX_MATCH_NO;
@@ -410,12 +410,12 @@ add_option_to_tree(void *data, unsigned char *name)
 {
 	struct add_option_to_tree_ctx *ctx = data;
 	struct option *old = get_opt_rec_real(ctx->option, name);
-	struct option *new;
+	struct option *new_;
 
 	if (old && (old->flags & OPT_DELETED)) delete_option(old);
 	/* get_opt_rec() will create the option. */
-	new = get_opt_rec(ctx->option, name);
-	if (new) listbox_sel(ctx->widget_data, new->box_item);
+	new_ = get_opt_rec(ctx->option, name);
+	if (new_) listbox_sel(ctx->widget_data, new_->box_item);
 	/* TODO: If the return value is NULL, we should pop up a msgbox. */
 }
 
@@ -552,7 +552,7 @@ init_keybinding_listboxes(struct keymap keymap_table[KEYMAP_MAX],
 {
 	struct listbox_item *root = &keybinding_browser.root;
 	const struct action *act;
-	enum keymap_id keymap_id;
+	int keymap_id;
 
 	/* Do it backwards because add_listbox_item() add to front
 	 * of list. */
@@ -709,7 +709,7 @@ match_keybinding(struct listbox_item *item, struct terminal *term,
 	desc = keybinding_text_toggle
 	     ? action->str : _(action->desc, term);
 
-	if ((desc && strcasestr(desc, text)))
+	if ((desc && strcasestr((const char *)desc, (const char *)text)))
 		return LISTBOX_MATCH_OK;
 
 	return LISTBOX_MATCH_NO;

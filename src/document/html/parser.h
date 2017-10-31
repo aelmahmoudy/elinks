@@ -3,6 +3,7 @@
 #define EL__DOCUMENT_HTML_PARSER_H
 
 #include "document/format.h"
+#include "document/forms.h"
 #include "document/html/renderer.h" /* enum html_special_type */
 #include "intl/charsets.h" /* unicode_val_T */
 #include "util/align.h"
@@ -22,6 +23,14 @@ struct uri;
 /* XXX: This is just terible - this interface is from 75% only for other HTML
  * files - there's lack of any well defined interface and it's all randomly
  * mixed up :/. */
+struct text_attrib_color {
+	color_T clink;
+	color_T vlink;
+#ifdef CONFIG_BOOKMARKS
+	color_T bookmark_link;
+#endif
+	color_T image_link;
+};
 
 struct text_attrib {
 	struct text_style style;
@@ -35,12 +44,8 @@ struct text_attrib {
 	unsigned char *title;
 
 	struct form_control *form;
-	color_T clink;
-	color_T vlink;
-#ifdef CONFIG_BOOKMARKS
-	color_T bookmark_link;
-#endif
-	color_T image_link;
+
+	struct text_attrib_color color;
 
 #ifdef CONFIG_CSS
 	/* Bug 766: CSS speedup.  56% of CPU time was going to
@@ -49,11 +54,11 @@ struct text_attrib {
 	 * these pointers if html_context->options->css_enable;
 	 * otherwise they remain NULL. */
 	unsigned char *id;
-	unsigned char *class;
+	unsigned char *class_;
 #endif
 
 	unsigned char *select;
-	int select_disabled;
+	enum form_mode select_disabled;
 	unsigned int tabindex;
 	unicode_val_T accesskey;
 
@@ -68,7 +73,7 @@ struct text_attrib {
 
 /* This enum is pretty ugly, yes ;). */
 enum format_list_flag {
-	P_NONE = 0,
+	P_NO_BULLET = 0,
 
 	P_NUMBER = 1,
 	P_alpha = 2,
@@ -76,9 +81,9 @@ enum format_list_flag {
 	P_roman = 4,
 	P_ROMAN = 5,
 
-	P_STAR = 1,
+	P_DISC = 1,
 	P_O = 2,
-	P_PLUS = 3,
+	P_SQUARE = 3,
 
 	P_LISTMASK = 7,
 
@@ -94,7 +99,9 @@ struct par_attrib {
 	unsigned list_number;
 	int dd_margin;
 	enum format_list_flag flags;
-	color_T bgcolor;
+	struct {
+		color_T background;
+	} color;
 };
 
 /* HTML parser stack mortality info */
@@ -115,6 +122,11 @@ enum html_element_mortality_type {
 	ELEMENT_WEAK,
 };
 
+enum html_element_pseudo_class {
+	ELEMENT_LINK = 1,
+	ELEMENT_VISITED = 2,
+};
+
 struct html_element {
 	LIST_HEAD(struct html_element);
 
@@ -122,9 +134,18 @@ struct html_element {
 
 	struct text_attrib attr;
 	struct par_attrib parattr;
+
+	/* invisible is a flag using which element handlers can control
+	 * processing in start_element. 0 indicates that start_element should
+	 * process tags, 1 indicates that it should not, and 2 or greater
+	 * indicates that it should process only script tags. */
 	int invisible;
+
+	/* The name of the element without NUL termination. name is a pointer
+	 * into the actual document source. */
 	unsigned char *name;
 	int namelen;
+
 	unsigned char *options;
 	/* See document/html/parser/parse.c's element_info.linebreak
 	 * description. */
@@ -132,13 +153,11 @@ struct html_element {
 	struct frameset_desc *frameset;
 
 	/* For the needs of CSS engine. A wannabe bitmask. */
-	enum html_element_pseudo_class {
-		ELEMENT_LINK = 1,
-		ELEMENT_VISITED = 2,
-	} pseudo_class;
+	enum html_element_pseudo_class pseudo_class;
 };
-#define is_inline_element(e) (e->linebreak == 0)
-#define is_block_element(e) (e->linebreak > 0)
+
+#define is_inline_element(e) ((e)->linebreak == 0)
+#define is_block_element(e) ((e)->linebreak > 0)
 
 /* Interface for the renderer */
 

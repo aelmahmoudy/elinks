@@ -90,7 +90,7 @@ erb_report_error(struct session *ses, int error)
 			snprintf(buff, MAX_STR_LEN, "%s: %s",
 				RSTRING(epath)->ptr, RSTRING(einfo)->ptr);
 
-			p = strchr(buff, '\n');
+			p = strchr((const char *)buff, '\n');
 			if (p) *p = '\0';
 			msg = buff;
 		}
@@ -113,21 +113,23 @@ static VALUE
 erb_module_message(VALUE self, VALUE str)
 {
 	unsigned char *message, *line_end;
+	struct terminal *term;
 
 	str = rb_obj_as_string(str);
 	message = memacpy(RSTRING(str)->ptr, RSTRING(str)->len);
 	if (!message) return Qnil;
 
-	line_end = strchr(message, '\n');
+	line_end = strchr((const char *)message, '\n');
 	if (line_end) *line_end = '\0';
 
-	if (list_empty(terminals)) {
+	term = get_default_terminal();
+	if (!term) {
 		usrerror("[Ruby] %s", message);
 		mem_free(message);
 		return Qnil;
 	}
 
-	info_box(terminals.next, MSGBOX_NO_TEXT_INTL | MSGBOX_FREE_TEXT,
+	info_box(term, MSGBOX_NO_TEXT_INTL | MSGBOX_FREE_TEXT,
 		 N_("Ruby Message"), ALIGN_LEFT, message);
 
 	return Qnil;
@@ -144,6 +146,7 @@ erb_stdout_p(int argc, VALUE *argv, VALUE self)
 {
 	int i;
 	struct string string;
+	struct terminal *term;
 
 	if (!init_string(&string))
 		return Qnil;
@@ -174,13 +177,14 @@ erb_stdout_p(int argc, VALUE *argv, VALUE self)
 		add_bytes_to_string(&string, ptr, len);
 	}
 
-	if (list_empty(terminals)) {
+	term = get_default_terminal();
+	if (!term) {
 		usrerror("[Ruby] %s", string.source);
 		done_string(&string);
 		return Qnil;
 	}
 
-	info_box(terminals.next, MSGBOX_NO_TEXT_INTL | MSGBOX_FREE_TEXT,
+	info_box(term, MSGBOX_NO_TEXT_INTL | MSGBOX_FREE_TEXT,
 		N_("Ruby Message"), ALIGN_LEFT, string.source);
 
 	return Qnil;

@@ -72,7 +72,7 @@ check_bittorrent_peer_blacklisting(struct bittorrent_peer_connection *peer,
 	enum bittorrent_blacklist_flags flags = BITTORRENT_BLACKLIST_NONE;
 
 	if (bittorrent_id_is_empty(peer->id)
-	    || !get_opt_bool("protocol.http.bugs.allow_blacklist"))
+	    || !get_opt_bool("protocol.http.bugs.allow_blacklist", NULL))
 		return;
 
 	if (is_system_error(state)) {
@@ -124,7 +124,7 @@ bittorrent_peer_connection_timeout(struct bittorrent_peer_connection *peer)
 void
 set_bittorrent_peer_connection_timeout(struct bittorrent_peer_connection *peer)
 {
-	milliseconds_T timeout = sec_to_ms(get_opt_int("protocol.bittorrent.peerwire.timeout"));
+	milliseconds_T timeout = sec_to_ms(get_opt_int("protocol.bittorrent.peerwire.timeout", NULL));
 
 	kill_timer(&peer->timer);
 	install_timer(&peer->timer, timeout,
@@ -296,7 +296,7 @@ make_bittorrent_peer_connection(struct bittorrent_connection *bittorrent,
 	if (!init_string(&uri_string)) goto out;
 	if (!add_format_to_string(&uri_string,
 #ifdef CONFIG_IPV6
-				  strchr(peer_info->ip, ':') ?
+				  strchr((const char *)peer_info->ip, ':') ?
 				  "bittorrent-peer://[%s]:%u/" :
 #endif
 				  "bittorrent-peer://%s:%u/",
@@ -325,7 +325,7 @@ out:
 /* Number of connections to keep in the listening backlog before dropping new
  * ones. */
 #define LISTEN_BACKLOG	\
-	get_opt_int("protocol.bittorrent.peerwire.connections")
+	get_opt_int("protocol.bittorrent.peerwire.connections", NULL)
 
 /* Called when we receive a connection on the listening socket. */
 static void
@@ -396,8 +396,8 @@ init_bittorrent_listening_socket(struct connection *conn)
 
 	/* Bind it to some port */
 
-	port	 = get_opt_int("protocol.bittorrent.ports.min");
-	max_port = get_opt_int("protocol.bittorrent.ports.max");
+	port	 = get_opt_int("protocol.bittorrent.ports.min", NULL);
+	max_port = get_opt_int("protocol.bittorrent.ports.max", NULL);
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_port = htons(port);

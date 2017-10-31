@@ -81,15 +81,15 @@ iso639_to_language(unsigned char *iso639)
 
 	/* The environment variable transformation. */
 
-	p = strchr(l, '.');
+	p = strchr((const char *)l, '.');
 	if (p)
 		*p = '\0';
 
-	p = strchr(l, '_');
+	p = strchr((const char *)l, '_');
 	if (p)
 		*p = '-';
 	else
-		p = strchr(l, '-');
+		p = strchr((const char *)l, '-');
 
 	/* Exact match. */
 
@@ -206,10 +206,13 @@ set_language(int language)
 		/* We never free() this, purely intentionally. */
 		LANGUAGE = malloc(256);
 	}
-	strcpy(LANGUAGE, language_to_iso639(language));
-	p = strchr(LANGUAGE, '-');
-	if (p)
-		*p = '_';
+	if (LANGUAGE) {
+		strcpy(LANGUAGE, language_to_iso639(language));
+		p = strchr((const char *)LANGUAGE, '-');
+		if (p) {
+			*p = '_';
+		}
+	}
 
 	/* Propagate the change to gettext. From the info manual. */
 	{

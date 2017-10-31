@@ -24,11 +24,17 @@
 /* Define if you want: Bookmarks support */
 #undef CONFIG_BOOKMARKS
 
+/* Define if you want: brotli support */
+#undef CONFIG_BROTLI
+
 /* Define if you want: bzlib support */
 #undef CONFIG_BZIP2
 
 /* Define if you want: Local CGI support */
 #undef CONFIG_CGI
+
+/* Define if you want: Combining characters support */
+#undef CONFIG_COMBINE
 
 /* Define if you want: Cookies support */
 #undef CONFIG_COOKIES
@@ -57,6 +63,9 @@
 /* Define if you want: SpiderMonkey document scripting support */
 #undef CONFIG_ECMASCRIPT_SMJS
 
+/* Define if you want: ECMAScript heartbeat support support */
+#undef CONFIG_ECMASCRIPT_SMJS_HEARTBEAT
+
 /* Define if you want: Exmode interface support */
 #undef CONFIG_EXMODE
 
@@ -74,9 +83,6 @@
 
 /* Define if you want: FTP protocol support */
 #undef CONFIG_FTP
-
-/* Define if you want: gc support */
-#undef CONFIG_GC
 
 /* Define if you want: Global history support */
 #undef CONFIG_GLOBHIST
@@ -114,6 +120,9 @@
 /* Define if you want: LEDs support */
 #undef CONFIG_LEDS
 
+/* Define as 1 to use the libdom library. */
+#undef CONFIG_LIBDOM
+
 /* Define if you want: lzma support */
 #undef CONFIG_LZMA
 
@@ -144,6 +153,9 @@
 
 /* Define if you want: No root exec support */
 #undef CONFIG_NO_ROOT_EXEC
+
+/* Define if you want: nss_compat_ossl support */
+#undef CONFIG_NSS_COMPAT_OSSL
 
 /* Define if you want: OpenSSL support */
 #undef CONFIG_OPENSSL
@@ -268,6 +280,9 @@
 /* Define if you have _beginthread() */
 #undef HAVE_BEGINTHREAD
 
+/* Define to 1 if you have the <brotli/decode.h> header file. */
+#undef HAVE_BROTLI_DECODE_H
+
 /* Define to 1 if you have the <bzlib.h> header file. */
 #undef HAVE_BZLIB_H
 
@@ -305,6 +320,12 @@
 /* Define to 1 if you have the `fgets_unlocked' function. */
 #undef HAVE_FGETS_UNLOCKED
 
+/* Define to 1 if you have the `fork' function. */
+#undef HAVE_FORK
+
+/* Define to 1 if you have the `fpathconf' function. */
+#undef HAVE_FPATHCONF
+
 /* Define to 1 if you have the `fseeko' function. */
 #undef HAVE_FSEEKO
 
@@ -316,9 +337,6 @@
 
 /* Define to 1 if you have the `ftello' function. */
 #undef HAVE_FTELLO
-
-/* Define to 1 if you have the <gc.h> header file. */
-#undef HAVE_GC_H
 
 /* Define to 1 if you have the `getcwd' function. */
 #undef HAVE_GETCWD
@@ -398,6 +416,15 @@
 /* Define to 1 if you have the `isdigit' function. */
 #undef HAVE_ISDIGIT
 
+/* Define to 1 if you have the `JS_ReportAllocationOverflow' function. */
+#undef HAVE_JS_REPORTALLOCATIONOVERFLOW
+
+/* Define to 1 if you have the `JS_SetBranchCallback' function. */
+#undef HAVE_JS_SETBRANCHCALLBACK
+
+/* Define to 1 if you have the `JS_TriggerOperationCallback' function. */
+#undef HAVE_JS_TRIGGEROPERATIONCALLBACK
+
 /* Define to 1 if you have the `kill' function. */
 #undef HAVE_KILL
 
@@ -415,6 +442,10 @@
 
 /* Define to 1 if you have the `nsl' library (-lnsl). */
 #undef HAVE_LIBNSL
+
+/* Define to 1 if you have the `nss_compat_ossl' library (-lnss_compat_ossl).
+   */
+#undef HAVE_LIBNSS_COMPAT_OSSL
 
 /* Define to 1 if you have the <libsmbclient.h> header file. */
 #undef HAVE_LIBSMBCLIENT_H
@@ -491,6 +522,10 @@
 /* Define to 1 if you have the <nl_types.h> header file. */
 #undef HAVE_NL_TYPES_H
 
+/* Define to 1 if you have the <nss_compat_ossl/nss_compat_ossl.h> header
+   file. */
+#undef HAVE_NSS_COMPAT_OSSL_NSS_COMPAT_OSSL_H
+
 /* Define if you have off_t */
 #undef HAVE_OFF_T
 
@@ -520,6 +555,9 @@
 
 /* Define to 1 if you have the `setenv' function. */
 #undef HAVE_SETENV
+
+/* Define to 1 if you have the `setitimer' function. */
+#undef HAVE_SETITIMER
 
 /* Define to 1 if you have the `setlocale' function. */
 #undef HAVE_SETLOCALE
@@ -670,6 +708,9 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* Define to 1 if you have the `unsetenv' function. */
+#undef HAVE_UNSETENV
+
 /* Define if you have variadic macros */
 #undef HAVE_VARIADIC_MACROS
 
@@ -682,8 +723,14 @@
 /* Define to 1 if you have the `vsnprintf' function. */
 #undef HAVE_VSNPRINTF
 
+/* Define to 1 if you have the <wchar.h> header file. */
+#undef HAVE_WCHAR_H
+
 /* Define to 1 if you have the <wctype.h> header file. */
 #undef HAVE_WCTYPE_H
+
+/* Define to 1 if you have the `wcwidth' function. */
+#undef HAVE_WCWIDTH
 
 /* Define to 1 if you have the <windows.h> header file. */
 #undef HAVE_WINDOWS_H
@@ -696,9 +743,6 @@
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #undef HAVE_ZLIB_H
-
-/* Define to 1 if you have the `[JS_ReportAllocationOverflow]' function. */
-#undef HAVE__JS_REPORTALLOCATIONOVERFLOW_
 
 /* Define to 1 if you have the `__argz_count' function. */
 #undef HAVE___ARGZ_COUNT
@@ -753,6 +797,9 @@
 
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
@@ -811,6 +858,11 @@
    version of TCC provides an <alloca.h> of its own, this hack won't be
    needed. */
 #undef _ALLOCA_H
+
+/* Enable large inode numbers on Mac OS X 10.5.  */
+#ifndef _DARWIN_USE_64_BIT_INODE
+# define _DARWIN_USE_64_BIT_INODE 1
+#endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */
 #undef _FILE_OFFSET_BITS

@@ -16,6 +16,6 @@ endif
 
 OBJS-$(CONFIG_ANY_SPIDERMONKEY) += spidermonkey-shared.o
 
-OBJS	= ecmascript.o location-goto.o
+OBJS	= ecmascript.o
 
 include $(top_srcdir)/Makefile.lib

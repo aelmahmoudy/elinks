@@ -285,7 +285,93 @@ set_term_color16(struct screen_char *schar, enum color_flags flags,
 	if (use_inverse(bg, fg)) {
 		schar->attr |= SCREEN_ATTR_STANDOUT;
 	}
-	schar->color[0] = (bg << 4 | fg);
+	schar->c.color[0] = (bg << 4 | fg);
+}
+
+color_T
+get_term_color16(unsigned int index)
+{
+	if (index > 15) return 0;
+	return ((palette16[index].r << 16) |
+		(palette16[index].g << 8) |
+		palette16[index].b);
+}
+
+#ifdef CONFIG_88_COLORS
+color_T
+get_term_color88(unsigned int index)
+{
+	if (index > 87) return 0;
+	return ((palette88[index].r << 16) |
+		(palette88[index].g << 8) |
+		palette88[index].b);
+}
+#endif
+
+#ifdef CONFIG_256_COLORS
+color_T
+get_term_color256(unsigned int index)
+{
+	if (index > 255) return 0;
+	return ((palette256[index].r << 16) |
+		(palette256[index].g << 8) |
+		palette256[index].b);
+}
+#endif
+
+void
+get_screen_char_color(struct screen_char *schar, struct color_pair *pair,
+		      enum color_flags flags, enum color_mode color_mode)
+{
+	unsigned char fg, bg;
+
+	assert(color_mode >= COLOR_MODE_DUMP && color_mode < COLOR_MODES);
+
+	/* Options for the various color modes. */
+	switch (color_mode) {
+
+	case COLOR_MODE_MONO:
+		break;
+
+	default:
+		/* If the desired color mode was not compiled in,
+		 * use 16 colors.  */
+	case COLOR_MODE_16:
+		bg = (schar->c.color[0] >> 4) & 7;
+		fg = schar->c.color[0];
+		pair->foreground = get_term_color16(fg);
+		pair->background = get_term_color16(bg);
+		break;
+#ifdef CONFIG_88_COLORS
+	case COLOR_MODE_88:
+		pair->foreground = get_term_color88(schar->c.color[0]);
+		pair->background = get_term_color88(schar->c.color[1]);
+		break;
+#endif
+#ifdef CONFIG_256_COLORS
+	case COLOR_MODE_256:
+		pair->foreground = get_term_color256(schar->c.color[0]);
+		pair->background = get_term_color256(schar->c.color[1]);
+		break;
+#endif
+#ifdef CONFIG_TRUE_COLOR
+	case COLOR_MODE_TRUE_COLOR:
+		pair->foreground = ((schar->c.color[0] << 16)
+				| (schar->c.color[1] << 8)
+				| schar->c.color[2]);
+		
+		pair->background = ((schar->c.color[3] << 16)
+				| (schar->c.color[4] << 8)
+				| schar->c.color[5]);
+		break;
+#endif
+	case COLOR_MODE_DUMP:
+		break;
+
+	case COLOR_MODES:
+		/* This is caught by the assert() above. */
+		break;
+	}
 }
 
 void
@@ -347,12 +433,12 @@ set_term_color(struct screen_char *schar, struct color_pair *pair,
 				pair->foreground = (pair->background == 0) ? 0xffffff : 0;
 			}
                 }
-		schar->color[0] = (pair->foreground >> 16) & 255; /* r */
-		schar->color[1] = (pair->foreground >> 8) & 255; /* g */
-		schar->color[2] = pair->foreground & 255; /* b */
-		schar->color[3] = (pair->background >> 16) & 255; /* r */
-		schar->color[4] = (pair->background >> 8) & 255; /* g */
-		schar->color[5] = pair->background & 255; /* b */
+		schar->c.color[0] = (pair->foreground >> 16) & 255; /* r */
+		schar->c.color[1] = (pair->foreground >> 8) & 255; /* g */
+		schar->c.color[2] = pair->foreground & 255; /* b */
+		schar->c.color[3] = (pair->background >> 16) & 255; /* r */
+		schar->c.color[4] = (pair->background >> 8) & 255; /* g */
+		schar->c.color[5] = pair->background & 255; /* b */
 		return;
 #endif
 	case COLOR_MODE_DUMP:
@@ -397,8 +483,8 @@ set_term_color(struct screen_char *schar, struct color_pair *pair,
 			}
 		}
 
-		TERM_COLOR_FOREGROUND_256(schar->color) = fg;
-		TERM_COLOR_BACKGROUND_256(schar->color) = bg;
+		TERM_COLOR_FOREGROUND_256(schar->c.color) = fg;
+		TERM_COLOR_BACKGROUND_256(schar->c.color) = bg;
 		break;
 #endif
 #ifdef CONFIG_TRUE_COLOR

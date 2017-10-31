@@ -8,7 +8,6 @@
 #include "main/module.h"
 #include "util/time.h"
 
-struct document_view;
 struct form_state;
 struct form_view;
 struct string;
@@ -16,7 +15,7 @@ struct terminal;
 struct uri;
 struct view_state;
 
-#define get_ecmascript_enable()		get_opt_bool("ecmascript.enable")
+#define get_ecmascript_enable()		get_opt_bool("ecmascript.enable", NULL)
 
 struct ecmascript_interpreter {
 	struct view_state *vs;
@@ -33,7 +32,11 @@ struct ecmascript_interpreter {
 	/* The code evaluated by setTimeout() */
 	struct string code;
 
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	struct heartbeat *heartbeat;
+#elif defined(HAVE_JS_SETBRANCHCALLBACK)
 	time_t exec_start;
+#endif
 
 	/* This is a cross-rerenderings accumulator of
 	 * @document.onload_snippets (see its description for juicy details).
@@ -72,6 +75,7 @@ void ecmascript_free_urls(struct module *module);
 
 struct ecmascript_interpreter *ecmascript_get_interpreter(struct view_state*vs);
 void ecmascript_put_interpreter(struct ecmascript_interpreter *interpreter);
+int ecmascript_get_interpreter_count(void);
 
 void ecmascript_detach_form_view(struct form_view *fv);
 void ecmascript_detach_form_state(struct form_state *fs);
@@ -95,7 +99,5 @@ void ecmascript_set_action(unsigned char **action, unsigned char *string);
 void ecmascript_set_timeout(struct ecmascript_interpreter *interpreter, unsigned char *code, int timeout);
 
 extern struct module ecmascript_module;
-
-void location_goto(struct document_view *doc_view, unsigned char *url);
 
 #endif

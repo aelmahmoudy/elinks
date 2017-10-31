@@ -49,12 +49,25 @@ free_task(struct session *ses)
 		ses->loading_uri = NULL;
 	}
 	ses->task.type = TASK_NONE;
+	mem_free_set(&ses->task.target.frame, NULL);
 }
 
 void
 abort_preloading(struct session *ses, int interrupt)
 {
-	if (!ses->task.type) return;
+	if (!ses->task.type) {
+		/* ses->task.target.frame must be freed in the
+		 * destroy_session() => abort_loading() =>
+		 * abort_preloading() call chain.  Normally,
+		 * free_task() called from here would do that,
+		 * but if the task has no type, free_task()
+		 * cannot be called because an assertion would
+		 * fail.  There are several functions that set
+		 * ses->task.target.frame without ses->task.type,
+		 * so apparently it is allowed.  */
+		mem_free_set(&ses->task.target.frame, NULL);
+		return;
+	}
 
 	cancel_download(&ses->loading, interrupt);
 	free_task(ses);
@@ -78,7 +91,7 @@ ses_load(struct session *ses, struct uri *uri, unsigned char *target_frame,
 	ses->loading_uri = uri;
 
 	ses->task.type = task_type;
-	ses->task.target.frame = target_frame;
+	mem_free_set(&ses->task.target.frame, null_or_stracpy(target_frame));
 	ses->task.target.location = target_location;
 
 	load_uri(ses->loading_uri, ses->referrer, &ses->loading,
@@ -170,8 +183,9 @@ ses_goto(struct session *ses, struct uri *uri, unsigned char *target_frame,
 	int referrer_incomplete = 0;
 	int malicious_uri = 0;
 	int confirm_submit = uri->form && get_opt_bool("document.browse.forms"
-	                                               ".confirm_submit");
+	                                               ".confirm_submit", ses);
 	unsigned char *m1 = NULL, *message = NULL;
+	struct memory_list *mlist = NULL;
 
 	if (ses->doc_view
 	    && ses->doc_view->document
@@ -194,7 +208,7 @@ ses_goto(struct session *ses, struct uri *uri, unsigned char *target_frame,
 	 * posting form data so this should be more correct. */
 
 	if (uri->user && uri->userlen
-	    && get_opt_bool("document.browse.links.warn_malicious")
+	    && get_opt_bool("document.browse.links.warn_malicious", ses)
 	    && check_malicious_uri(uri)) {
 		malicious_uri = 1;
 		confirm_submit = 1;
@@ -231,7 +245,7 @@ ses_goto(struct session *ses, struct uri *uri, unsigned char *target_frame,
 	task->uri = get_uri_reference(uri);
 	task->cache_mode = cache_mode;
 	task->session_task.type = task_type;
-	task->session_task.target.frame = target_frame;
+	task->session_task.target.frame = null_or_stracpy(target_frame);
 	task->session_task.target.location = target_location;
 
 	if (malicious_uri) {
@@ -271,7 +285,10 @@ ses_goto(struct session *ses, struct uri *uri, unsigned char *target_frame,
 		mem_free_if(uristring);
 	}
 
-	msg_box(ses->tab->term, getml(task, (void *) NULL), MSGBOX_FREE_TEXT,
+	add_to_ml(&mlist, task, (void *) NULL);
+	if (task->session_task.target.frame)
+		add_to_ml(&mlist, task->session_task.target.frame, (void *) NULL);
+	msg_box(ses->tab->term, mlist, MSGBOX_FREE_TEXT,
 		N_("Warning"), ALIGN_CENTER,
 		message,
 		task, 2,
@@ -322,7 +339,7 @@ x:
 				del_from_history(&ses->history, loc);
 				destroy_location(loc);
 			}
-			ses->task.target.frame = NULL;
+			mem_free_set(&ses->task.target.frame, NULL);
 			goto x;
 		}
 
@@ -389,8 +406,8 @@ ses_imgmap(struct session *ses)
 			  &doc_view->document->options,
 			  ses->task.target.frame,
 			  get_terminal_codepage(ses->tab->term),
-			  get_opt_codepage("document.codepage.assume"),
-			  get_opt_bool("document.codepage.force_assumed")))
+			  get_opt_codepage("document.codepage.assume", ses),
+			  get_opt_bool("document.codepage.force_assumed", ses)))
 		return;
 
 	add_empty_window(ses->tab->term, (void (*)(void *)) freeml, ml);
@@ -584,7 +601,8 @@ do_follow_url(struct session *ses, struct uri *uri, unsigned char *target,
 	}
 
 	if (target && !strcmp(target, "_blank")) {
-		int mode = get_opt_int("document.browse.links.target_blank");
+		int mode = get_opt_int("document.browse.links.target_blank",
+		                       ses);
 
 		if (mode == 3
 		    && !get_cmd_opt_bool("anonymous")
@@ -628,8 +646,14 @@ follow_url(struct session *ses, struct uri *uri, unsigned char *target,
 {
 #ifdef CONFIG_SCRIPTING
 	static int follow_url_event_id = EVENT_NONE;
-	unsigned char *uristring = uri ? get_uri_string(uri, URI_BASE | URI_FRAGMENT) : NULL;
+	unsigned char *uristring;
 
+	uristring = uri && !uri->post ? get_uri_string(uri, URI_BASE | URI_FRAGMENT)
+	                              : NULL;
+
+	/* Do nothing if we do not have a URI or if it is a POST request
+	 * because scripts can corrupt POST requests leading to bad
+	 * things happening later on. */
 	if (!uristring) {
 		do_follow_url(ses, uri, target, task, cache_mode, referrer);
 		return;
@@ -678,14 +702,14 @@ delayed_goto_uri_frame(void *data)
 	struct frame *frame;
 
 	assert(deo);
-	frame = ses_find_frame(deo->ses, deo->target);
+	frame = deo->target ? ses_find_frame(deo->ses, deo->target) : NULL;
 	if (frame)
 		goto_uri_frame(deo->ses, deo->uri, frame->name, CACHE_MODE_NORMAL);
 	else {
 		goto_uri_frame(deo->ses, deo->uri, NULL, CACHE_MODE_NORMAL);
 	}
 	done_uri(deo->uri);
-	mem_free(deo->target);
+	mem_free_if(deo->target);
 	mem_free(deo);
 }
 
@@ -755,7 +779,7 @@ goto_url_with_hook(struct session *ses, unsigned char *url)
 int
 goto_url_home(struct session *ses)
 {
-	unsigned char *homepage = get_opt_str("ui.sessions.homepage");
+	unsigned char *homepage = get_opt_str("ui.sessions.homepage", ses);
 
 	if (!*homepage) homepage = getenv("WWW_HOME");
 	if (!homepage || !*homepage) homepage = WWW_HOME_URL;

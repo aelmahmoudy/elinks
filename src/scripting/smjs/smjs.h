@@ -3,6 +3,9 @@
 
 struct module;
 struct cache_entry;
+struct session;
+struct terminal;
+struct view_state;
 
 extern struct module smjs_scripting_module;
 
@@ -11,5 +14,11 @@ extern struct module smjs_scripting_module;
  * changes in struct cache_object though, to let a dynamic number of
  * scripting modules have pointers from there to their objects.  */
 void smjs_detach_cache_entry_object(struct cache_entry *cached);
+
+void smjs_detach_session_object(struct session *ses);
+
+void smjs_detach_terminal_object(struct terminal *term);
+
+void smjs_detach_view_state_object(struct view_state *vs);
 
 #endif

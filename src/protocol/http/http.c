@@ -8,12 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#ifdef HAVE_FCNTL_H
-#include <fcntl.h> /* OS/2 needs this after sys/types.h */
-#endif
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
@@ -51,11 +45,7 @@
 #include "http_negotiate.h"
 #endif
 
-struct http_version {
-	int major;
-	int minor;
-};
-
+/* These macros concern the struct http_version defined in the http.h */
 #define HTTP_0_9(x)	 ((x).major == 0 && (x).minor == 9)
 #define HTTP_1_0(x)	 ((x).major == 1 && (x).minor == 0)
 #define HTTP_1_1(x)	 ((x).major == 1 && (x).minor == 1)
@@ -65,26 +55,13 @@ struct http_version {
 #define POST_HTTP_1_1(x) ((x).major > 1 || ((x).major == 1 && (x).minor > 1))
 
 
-struct http_connection_info {
-	enum blacklist_flags bl_flags;
-	struct http_version recv_version;
-	struct http_version sent_version;
-
-	int close;
-
 #define LEN_CHUNKED -2 /* == we get data in unknown number of chunks */
 #define LEN_FINISHED 0
-	int length;
 
 	/* Either bytes coming in this chunk yet or "parser state". */
 #define CHUNK_DATA_END	-3
 #define CHUNK_ZERO_SIZE	-2
 #define CHUNK_SIZE	-1
-	int chunk_remaining;
-
-	int code;
-};
-
 
 static struct auth_entry proxy_auth;
 
@@ -227,7 +204,8 @@ static union option_info http_options[] = {
 		"pushing some lite version to them automagically.\n"
 		"\n"
 		"Use \" \" if you don't want any User-Agent header to be sent "
-		"at all.\n"
+		"at all. URI rewriting rules may still include parameters "
+		"that reveal you are using ELinks.\n"
 		"\n"
 		"%v in the string means ELinks version,\n"
 		"%s in the string means system identification,\n"
@@ -483,7 +461,7 @@ check_http_server_bugs(struct uri *uri, struct http_connection_info *http,
 		NULL
 	};
 
-	if (!get_opt_bool("protocol.http.bugs.allow_blacklist")
+	if (!get_opt_bool("protocol.http.bugs.allow_blacklist", NULL)
 	    || HTTP_1_0(http->sent_version))
 		return 0;
 
@@ -492,7 +470,7 @@ check_http_server_bugs(struct uri *uri, struct http_connection_info *http,
 		return 0;
 
 	for (s = buggy_servers; *s; s++) {
-		if (strstr(server, *s)) {
+		if (strstr((const char *)server, *s)) {
 			add_blacklist_entry(uri, SERVER_BLACKLIST_HTTP10);
 			break;
 		}
@@ -506,11 +484,19 @@ static void
 http_end_request(struct connection *conn, struct connection_state state,
 		 int notrunc)
 {
+	struct http_connection_info *http;
+
 	shutdown_connection_stream(conn);
 
-	if (conn->info && !((struct http_connection_info *) conn->info)->close
+	/* shutdown_connection_stream() should not change conn->info,
+	 * but in case it does, read conn->info only after the call.  */
+	http = conn->info;
+	if (http)
+		done_http_post(&http->post);
+
+	if (http && !http->close
 	    && (!conn->socket->ssl) /* We won't keep alive ssl connections */
-	    && (!get_opt_bool("protocol.http.bugs.post_no_keepalive")
+	    && (!get_opt_bool("protocol.http.bugs.post_no_keepalive", NULL)
 		|| !conn->uri->post)) {
 		if (is_in_state(state, S_OK) && conn->cached)
 			normalize_cache_entry(conn->cached, !notrunc ? conn->from : -1);
@@ -547,6 +533,19 @@ proxy_protocol_handler(struct connection *conn)
 #define connection_is_https_proxy(conn) \
 	(IS_PROXY_URI((conn)->uri) && (conn)->proxied_uri->protocol == PROTOCOL_HTTPS)
 
+/** connection.done points to this function if connection.info points
+ * to a struct http_connection_info.  */
+static void
+done_http_connection(struct connection *conn)
+{
+	struct http_connection_info *http = conn->info;
+
+	done_http_post(&http->post);
+	mem_free(http);
+	conn->info = NULL;
+	conn->done = NULL;
+}
+
 struct http_connection_info *
 init_http_connection_info(struct connection *conn, int major, int minor, int close)
 {
@@ -562,19 +561,26 @@ init_http_connection_info(struct connection *conn, int major, int minor, int clo
 	http->sent_version.minor = minor;
 	http->close = close;
 
+	init_http_post(&http->post);
+
 	/* The CGI code uses this too and blacklisting expects a host name. */
 	if (conn->proxied_uri->protocol != PROTOCOL_FILE)
 		http->bl_flags = get_blacklist_flags(conn->proxied_uri);
 
 	if (http->bl_flags & SERVER_BLACKLIST_HTTP10
-	    || get_opt_bool("protocol.http.bugs.http10")) {
+	    || get_opt_bool("protocol.http.bugs.http10", NULL)) {
 		http->sent_version.major = 1;
 		http->sent_version.minor = 0;
 	}
 
 	/* If called from HTTPS proxy connection the connection info might have
 	 * already been allocated. */
+	if (conn->done) {
+		conn->done(conn);
+		conn->done = NULL;
+	}
 	mem_free_set(&conn->info, http);
+	conn->done = done_http_connection;
 
 	return http;
 }
@@ -582,19 +588,25 @@ init_http_connection_info(struct connection *conn, int major, int minor, int clo
 static void
 accept_encoding_header(struct string *header)
 {
-#if defined(CONFIG_GZIP) || defined(CONFIG_BZIP2) || defined(CONFIG_LZMA)
+#if defined(CONFIG_GZIP) || defined(CONFIG_BZIP2) || defined(CONFIG_LZMA) || defined(CONFIG_BROTLI)
 	int comma = 0;
 
 	add_to_string(header, "Accept-Encoding: ");
 
+#ifdef CONFIG_BROTLI
+	add_to_string(header, "br");
+	comma = 1;
+#endif
+
 #ifdef CONFIG_BZIP2
+	if (comma) add_to_string(header, ", ");
 	add_to_string(header, "bzip2");
 	comma = 1;
 #endif
 
 #ifdef CONFIG_GZIP
 	if (comma) add_to_string(header, ", ");
-	add_to_string(header, "deflate, gzip");
+	add_to_string(header, "gzip, deflate");
 	comma = 1;
 #endif
 
@@ -606,12 +618,46 @@ accept_encoding_header(struct string *header)
 #endif
 }
 
+#define POST_BUFFER_SIZE 16384
+
+static void
+send_more_post_data(struct socket *socket)
+{
+	struct connection *conn = socket->conn;
+	struct http_connection_info *http = conn->info;
+	unsigned char buffer[POST_BUFFER_SIZE];
+	int got;
+	struct connection_state error;
+
+	got = read_http_post(&http->post, buffer, POST_BUFFER_SIZE, &error);
+	if (got < 0) {
+		http_end_request(conn, error, 0);
+	} else if (got > 0) {
+		write_to_socket(socket, buffer, got, connection_state(S_TRANS),
+				send_more_post_data);
+	} else {		/* got == 0, meaning end of data */
+		/* Can't use request_from_socket() because there's no
+		 * more data to write.  */
+		struct read_buffer *rb = alloc_read_buffer(socket);
+
+		socket->state = SOCKET_END_ONCLOSE;
+		if (rb)
+			read_from_socket(socket, rb, connection_state(S_SENT),
+					 http_got_header);
+		else
+			http_end_request(conn, connection_state(S_OUT_OF_MEM),
+					 0);
+	}
+}
+
+
+
 static void
 http_send_header(struct socket *socket)
 {
 	struct connection *conn = socket->conn;
 	struct http_connection_info *http;
-	int trace = get_opt_bool("protocol.http.trace");
+	int trace = get_opt_bool("protocol.http.trace", NULL);
 	struct string header;
 	unsigned char *post_data = NULL;
 	struct auth_entry *entry = NULL;
@@ -688,8 +734,8 @@ http_send_header(struct socket *socket)
 
 	/* CONNECT: Proxy-Authorization is intended to be seen by the proxy.  */
 	if (talking_to_proxy) {
-		unsigned char *user = get_opt_str("protocol.http.proxy.user");
-		unsigned char *passwd = get_opt_str("protocol.http.proxy.passwd");
+		unsigned char *user = get_opt_str("protocol.http.proxy.user", NULL);
+		unsigned char *passwd = get_opt_str("protocol.http.proxy.passwd", NULL);
 
 		if (proxy_auth.digest) {
 			unsigned char *response;
@@ -737,15 +783,17 @@ http_send_header(struct socket *socket)
 	/* CONNECT: User-Agent does not reveal anything about the
 	 * resource we're fetching, and it may help the proxy return
 	 * better error messages.  */
-	optstr = get_opt_str("protocol.http.user_agent");
+	optstr = get_opt_str("protocol.http.user_agent", NULL);
 	if (*optstr && strcmp(optstr, " ")) {
 		unsigned char *ustr, ts[64] = "";
+		/* TODO: Somehow get the terminal in which the
+		 * document will actually be displayed.  */
+		struct terminal *term = get_default_terminal();
 
 		add_to_string(&header, "User-Agent: ");
 
-		if (!list_empty(terminals)) {
+		if (term) {
 			unsigned int tslen = 0;
-			struct terminal *term = terminals.prev;
 
 			ulongcat(ts, &tslen, term->width, 3, 0);
 			ts[tslen++] = 'x';
@@ -765,13 +813,13 @@ http_send_header(struct socket *socket)
 	/* CONNECT: Referer probably is a secret page in the HTTPS
 	 * server, so don't reveal it to the proxy.  */
 	if (!use_connect) {
-		switch (get_opt_int("protocol.http.referer.policy")) {
+		switch (get_opt_int("protocol.http.referer.policy", NULL)) {
 			case REFERER_NONE:
 				/* oh well */
 				break;
 
 			case REFERER_FAKE:
-				optstr = get_opt_str("protocol.http.referer.fake");
+				optstr = get_opt_str("protocol.http.referer.fake", NULL);
 				if (!optstr[0]) break;
 				add_to_string(&header, "Referer: ");
 				add_to_string(&header, optstr);
@@ -806,7 +854,7 @@ http_send_header(struct socket *socket)
 	add_to_string(&header, "Accept: */*");
 	add_crlf_to_string(&header);
 
-	if (get_opt_bool("protocol.http.compression"))
+	if (get_opt_bool("protocol.http.compression", NULL))
 		accept_encoding_header(&header);
 
 	if (!accept_charset) {
@@ -814,19 +862,19 @@ http_send_header(struct socket *socket)
 	}
 
 	if (!(http->bl_flags & SERVER_BLACKLIST_NO_CHARSET)
-	    && !get_opt_bool("protocol.http.bugs.accept_charset")
+	    && !get_opt_bool("protocol.http.bugs.accept_charset", NULL)
 	    && accept_charset) {
 		add_to_string(&header, accept_charset);
 	}
 
-	optstr = get_opt_str("protocol.http.accept_language");
+	optstr = get_opt_str("protocol.http.accept_language", NULL);
 	if (optstr[0]) {
 		add_to_string(&header, "Accept-Language: ");
 		add_to_string(&header, optstr);
 		add_crlf_to_string(&header);
 	}
 #ifdef CONFIG_NLS
-	else if (get_opt_bool("protocol.http.accept_ui_language")) {
+	else if (get_opt_bool("protocol.http.accept_ui_language", NULL)) {
 		unsigned char *code = language_to_iso639(current_language);
 
 		if (code) {
@@ -850,7 +898,7 @@ http_send_header(struct socket *socket)
 			add_to_string(&header, "Proxy-Connection: ");
 		}
 
-		if (!uri->post || !get_opt_bool("protocol.http.bugs.post_no_keepalive")) {
+		if (!uri->post || !get_opt_bool("protocol.http.bugs.post_no_keepalive", NULL)) {
 			add_to_string(&header, "Keep-Alive");
 		} else {
 			add_to_string(&header, "close");
@@ -950,7 +998,8 @@ http_send_header(struct socket *socket)
 		/* We search for first '\n' in uri->post to get content type
 		 * as set by get_form_uri(). This '\n' is dropped if any
 		 * and replaced by correct '\r\n' termination here. */
-		unsigned char *postend = strchr(uri->post, '\n');
+		unsigned char *postend = strchr((const char *)uri->post, '\n');
+		struct connection_state error;
 
 		if (postend) {
 			add_to_string(&header, "Content-Type: ");
@@ -959,9 +1008,15 @@ http_send_header(struct socket *socket)
 		}
 
 		post_data = postend ? postend + 1 : uri->post;
-		add_to_string(&header, "Content-Length: ");
-		add_long_to_string(&header, strlen(post_data) / 2);
-		add_crlf_to_string(&header);
+		if (!open_http_post(&http->post, post_data, &error)) {
+			http_end_request(conn, error, 0);
+			done_string(&header);
+			return;
+		}
+		add_format_to_string(&header, "Content-Length: "
+				     "%" OFF_PRINT_FORMAT "\x0D\x0A",
+				     (off_print_T)
+				     http->post.total_upload_length);
 	}
 
 #ifdef CONFIG_COOKIES
@@ -984,154 +1039,36 @@ http_send_header(struct socket *socket)
 	 * This was already checked above and post_data is NULL
 	 * in that case.  Verified with an assertion below.  */
 	if (post_data) {
-#define POST_BUFFER_SIZE 4096
-		unsigned char *post = post_data;
-		unsigned char buffer[POST_BUFFER_SIZE];
-		int n = 0;
-
 		assert(!use_connect); /* see comment above */
 
-		while (post[0] && post[1]) {
-			int h1, h2;
-
-			h1 = unhx(post[0]);
-			assertm(h1 >= 0 && h1 < 16, "h1 in the POST buffer is %d (%d/%c)", h1, post[0], post[0]);
-			if_assert_failed h1 = 0;
-
-			h2 = unhx(post[1]);
-			assertm(h2 >= 0 && h2 < 16, "h2 in the POST buffer is %d (%d/%c)", h2, post[1], post[1]);
-			if_assert_failed h2 = 0;
-
-			buffer[n++] = (h1<<4) + h2;
-			post += 2;
-			if (n == POST_BUFFER_SIZE) {
-				add_bytes_to_string(&header, buffer, n);
-				n = 0;
-			}
-		}
-
-		if (n)
-			add_bytes_to_string(&header, buffer, n);
-#undef POST_BUFFER_SIZE
-	}
-
-	request_from_socket(socket, header.source, header.length,
-			    connection_state(S_SENT),
-			    SOCKET_END_ONCLOSE, http_got_header);
+		socket->state = SOCKET_END_ONCLOSE;
+		if (!conn->http_upload_progress && http->post.file_count)
+			conn->http_upload_progress = init_progress(0);
+		write_to_socket(socket, header.source, header.length,
+				connection_state(S_TRANS),
+				send_more_post_data);
+	} else
+		request_from_socket(socket, header.source, header.length,
+				    connection_state(S_SENT),
+				    SOCKET_END_ONCLOSE, http_got_header);
 	done_string(&header);
 }
 
+#undef POST_BUFFER_SIZE
 
-/* This function decompresses the data block given in @data (if it was
- * compressed), which is long @len bytes. The decompressed data block is given
- * back to the world as the return value and its length is stored into
- * @new_len. After this function returns, the caller will discard all the @len
- * input bytes, so this function must use all of them unless an error occurs.
- *
- * In this function, value of either http->chunk_remaining or http->length is
- * being changed (it depends on if chunked mode is used or not).
- *
- * Note that the function is still a little esotheric for me. Don't take it
- * lightly and don't mess with it without grave reason! If you dare to touch
- * this without testing the changes on slashdot, freshmeat and cvsweb
- * (including revision history), don't dare to send me any patches! ;) --pasky
- *
- * This function gotta die. */
+
 static unsigned char *
 decompress_data(struct connection *conn, unsigned char *data, int len,
 		int *new_len)
 {
-	struct http_connection_info *http = conn->info;
-	enum { NORMAL, FINISHING } state = NORMAL;
-	int did_read = 0;
-	int *length_of_block;
-	unsigned char *output = NULL;
-
-#define BIG_READ 655360
-
-	if (http->length == LEN_CHUNKED) {
-		if (http->chunk_remaining == CHUNK_ZERO_SIZE)
-			state = FINISHING;
-		length_of_block = &http->chunk_remaining;
-	} else {
-		length_of_block = &http->length;
-		if (!*length_of_block) {
-			/* Going to finish this decoding bussiness. */
-			state = FINISHING;
-		}
-	}
-
-	if (conn->content_encoding == ENCODING_NONE) {
-		*new_len = len;
-		if (*length_of_block > 0) *length_of_block -= len;
-		return data;
-	}
-
 	*new_len = 0; /* new_len must be zero if we would ever return NULL */
 
-	if (conn->stream_pipes[0] == -1
-	    && (c_pipe(conn->stream_pipes) < 0
-		|| set_nonblocking_fd(conn->stream_pipes[0]) < 0
-		|| set_nonblocking_fd(conn->stream_pipes[1]) < 0)) {
-		return NULL;
+	if (!conn->stream) {
+		conn->stream = open_encoded(-1, conn->content_encoding);
+		if (!conn->stream) return NULL;
 	}
 
-	do {
-		unsigned char *tmp;
-
-		if (state == NORMAL) {
-			/* ... we aren't finishing yet. */
-			int written = safe_write(conn->stream_pipes[1], data, len);
-
-			if (written >= 0) {
-				data += written;
-				len -= written;
-
-				/* In non-keep-alive connections http->length == -1, so the test below */
-				if (*length_of_block > 0)
-					*length_of_block -= written;
-				/* http->length is 0 at the end of block for all modes: keep-alive,
-				 * non-keep-alive and chunked */
-				if (!http->length) {
-					/* That's all, folks - let's finish this. */
-					state = FINISHING;
-				} else if (!len) {
-					/* We've done for this round (but not done
-					 * completely). Thus we will get out with
-					 * what we have and leave what we wrote to
-					 * the next round - we have to do that since
-					 * we MUST NOT ever empty the pipe completely
-					 * - this would cause a disaster for
-					 * read_encoded(), which would simply not
-					 * work right then. */
-					return output;
-				}
-			}
-		}
-
-		if (!conn->stream) {
-			conn->stream = open_encoded(conn->stream_pipes[0],
-					conn->content_encoding);
-			if (!conn->stream) return NULL;
-		}
-
-		tmp = mem_realloc(output, *new_len + BIG_READ);
-		if (!tmp) break;
-		output = tmp;
-
-		did_read = read_encoded(conn->stream, output + *new_len, BIG_READ);
-
-		if (did_read > 0)
-			*new_len += did_read;
-		else if (did_read != READENC_EAGAIN) {
-			state = FINISHING;
-			break;
-		}
-	} while (len || (did_read == BIG_READ));
-
-	if (state == FINISHING) shutdown_connection_stream(conn);
-	return output;
-#undef BIG_READ
+	return decode_encoded_buffer(conn->stream, conn->content_encoding, data, len, new_len);
 }
 
 static int
@@ -1256,7 +1193,6 @@ read_chunked_http_data(struct connection *conn, struct read_buffer *rb)
 			}
 
 		} else {
-			unsigned char *data;
 			int data_len;
 			int zero = (http->chunk_remaining == CHUNK_ZERO_SIZE);
 			int len = zero ? 0 : http->chunk_remaining;
@@ -1265,13 +1201,20 @@ read_chunked_http_data(struct connection *conn, struct read_buffer *rb)
 			int_upper_bound(&len, rb->length);
 			conn->received += len;
 
-			data = decompress_data(conn, rb->data, len, &data_len);
+			if (http->chunk_remaining > 0) http->chunk_remaining -= len;
+			if (conn->content_encoding == ENCODING_NONE) {
+				data_len = len;
+				if (add_fragment(conn->cached, conn->from, rb->data, len) == 1)
+					conn->tries = 0;
+			} else {
+				unsigned char *data = decompress_data(conn, rb->data, len, &data_len);
 
-			if (add_fragment(conn->cached, conn->from,
-					 data, data_len) == 1)
-				conn->tries = 0;
+				if (add_fragment(conn->cached, conn->from, data, data_len) == 1)
+					conn->tries = 0;
 
-			if (data && data != rb->data) mem_free(data);
+				mem_free_if(data);
+				if (zero || !http->length) shutdown_connection_stream(conn);
+			}
 
 			conn->from += data_len;
 			total_data_len += data_len;
@@ -1316,7 +1259,6 @@ static int
 read_normal_http_data(struct connection *conn, struct read_buffer *rb)
 {
 	struct http_connection_info *http = conn->info;
-	unsigned char *data;
 	int data_len;
 	int len = rb->length;
 
@@ -1326,13 +1268,29 @@ read_normal_http_data(struct connection *conn, struct read_buffer *rb)
 	}
 
 	conn->received += len;
+	if (http->length > 0) http->length -= len;
 
-	data = decompress_data(conn, rb->data, len, &data_len);
+	if (conn->content_encoding == ENCODING_NONE) {
+		data_len = len;
+		if (add_fragment(conn->cached, conn->from, rb->data, data_len) == 1)
+			conn->tries = 0;
+	} else {
+		unsigned char *data;
+finish:
+		data = decompress_data(conn, rb->data, len, &data_len);
 
-	if (add_fragment(conn->cached, conn->from, data, data_len) == 1)
-		conn->tries = 0;
+		if (!data && !http->length && len) {
+			kill_buffer_data(rb, len);
+			len = 0;
+			goto finish;
+		}
 
-	if (data && data != rb->data) mem_free(data);
+		if (add_fragment(conn->cached, conn->from, data, data_len) == 1)
+			conn->tries = 0;
+
+		mem_free_if(data);
+		if (!http->length) shutdown_connection_stream(conn);
+	}
 
 	conn->from += data_len;
 
@@ -1620,7 +1578,7 @@ again:
 	conn->cached->cgi = conn->cgi;
 	mem_free_set(&conn->cached->head, head);
 
-	if (!get_opt_bool("document.cache.ignore_cache_control")) {
+	if (!get_opt_bool("document.cache.ignore_cache_control", NULL)) {
 		struct cache_entry *cached = conn->cached;
 
 		/* I am not entirely sure in what order we should process these
@@ -1644,7 +1602,7 @@ again:
 		}
 
 		if ((d = parse_header(cached->head, "Pragma", NULL))) {
-			if (strstr(d, "no-cache")) {
+			if (strstr((const char *)d, "no-cache")) {
 				cached->cache_mode = CACHE_MODE_NEVER;
 				cached->expire = 0;
 			}
@@ -1653,12 +1611,12 @@ again:
 
 		if (cached->cache_mode != CACHE_MODE_NEVER
 		    && (d = parse_header(cached->head, "Cache-Control", NULL))) {
-			if (strstr(d, "no-cache") || strstr(d, "must-revalidate")) {
+			if (strstr((const char *)d, "no-cache") || strstr((const char *)d, "must-revalidate")) {
 				cached->cache_mode = CACHE_MODE_NEVER;
 				cached->expire = 0;
 
 			} else  {
-				unsigned char *pos = strstr(d, "max-age=");
+				unsigned char *pos = strstr((const char *)d, "max-age=");
 
 				assert(cached->cache_mode != CACHE_MODE_NEVER);
 
@@ -1697,7 +1655,7 @@ again:
 			/* So POST must not be redirected to GET, but some
 			 * BUGGY message boards rely on it :-( */
 	    		if (h == 302
-			    && get_opt_bool("protocol.http.bugs.broken_302_redirect"))
+			    && get_opt_bool("protocol.http.bugs.broken_302_redirect", NULL))
 				use_get_method = 1;
 
 			redirect_cache(conn->cached, d, use_get_method, -1);
@@ -1715,6 +1673,7 @@ again:
 	}
 	if (h == 407) {
 		unsigned char *str;
+		int restart = 0;
 
 		d = parse_header(conn->cached->head, "Proxy-Authenticate", &str);
 		while (d) {
@@ -1732,10 +1691,17 @@ again:
 				unsigned char *realm = get_header_param(d, "realm");
 				unsigned char *nonce = get_header_param(d, "nonce");
 				unsigned char *opaque = get_header_param(d, "opaque");
+				unsigned char *stale = get_header_param(d, "stale");
 
+				if (stale) {
+					if (strcasecmp(stale, "true")) restart = 1;
+					else restart = 0;
+					mem_free(stale);
+				}
 				mem_free_set(&proxy_auth.realm, realm);
 				mem_free_set(&proxy_auth.nonce, nonce);
 				mem_free_set(&proxy_auth.opaque, opaque);
+				if (proxy_auth.digest == 0) restart = 1;
 				proxy_auth.digest = 1;
 
 				mem_free(d);
@@ -1744,6 +1710,10 @@ again:
 
 			mem_free(d);
 			d = parse_header(str, "Proxy-Authenticate", &str);
+		}
+		if (restart) {
+			retry_connection(conn, connection_state(S_RESTART));
+			return;	
 		}
 	}
 
@@ -1805,10 +1775,10 @@ again:
 	d = parse_header(conn->cached->head, "Content-Length", NULL);
 	if (d) {
 		unsigned char *ep;
-		int l;
+		long long l;
 
 		errno = 0;
-		l = strtol(d, (char **) &ep, 10);
+		l = strtoll(d, (char **) &ep, 10);
 
 		if (!errno && !*ep && l >= 0) {
 			if (!http->close || POST_HTTP_1_0(version))
@@ -1894,12 +1864,13 @@ again:
 
 	d = parse_header(conn->cached->head, "Content-Encoding", NULL);
 	if (d) {
+#if defined(CONFIG_GZIP) || defined(CONFIG_BZIP2) || defined(CONFIG_LZMA) || defined(CONFIG_BROTLI)
 		unsigned char *extension = get_extension_from_uri(uri);
 		enum stream_encoding file_encoding;
 
 		file_encoding = extension ? guess_encoding(extension) : ENCODING_NONE;
 		mem_free_if(extension);
-
+#endif
 		/* If the content is encoded, we want to preserve the encoding
 		 * if it is implied by the extension, so that saving the URI
 		 * will leave the saved file with the correct encoding. */
@@ -1909,6 +1880,12 @@ again:
 		    	conn->content_encoding = ENCODING_GZIP;
 		if (!c_strcasecmp(d, "deflate") || !c_strcasecmp(d, "x-deflate"))
 			conn->content_encoding = ENCODING_DEFLATE;
+#endif
+
+#ifdef CONFIG_BROTLI
+		if (file_encoding != ENCODING_BROTLI
+		    && (!c_strcasecmp(d, "br")))
+			conn->content_encoding = ENCODING_BROTLI;
 #endif
 
 #ifdef CONFIG_BZIP2

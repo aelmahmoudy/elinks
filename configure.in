@@ -15,7 +15,7 @@ AC_CONFIG_SRCDIR([src/main/main.c])
 AC_CONFIG_AUX_DIR(config)
 
 PACKAGE=elinks
-VERSION=0.12pre6
+VERSION=0.13.GIT
 AC_SUBST(PACKAGE)
 AC_SUBST(VERSION)
 AC_DEFINE_UNQUOTED(PACKAGE, "$PACKAGE", [Package version])
@@ -48,8 +48,8 @@ fi
 # ===================================================================
 
 features="features.conf"
-AC_CHECK_FILE("$srcdir/$features", [ . $srcdir/$features ])
-AC_CHECK_FILE("$builddir/$features", [ . $builddir/$features ])
+test -f "$srcdir/$features" && . "$srcdir/$features"
+test -f "$builddir/$features" && . "$builddir/$features"
 echo "Feature summary:" > features.log
 
 # ===================================================================
@@ -57,6 +57,7 @@ echo "Feature summary:" > features.log
 # ===================================================================
 
 AC_PROG_CC
+AC_CHECK_TOOL([LD], [ld])
 AC_PROG_AWK
 AC_PATH_PROGS(AWK, "$AWK")
 AC_PROG_RANLIB
@@ -64,6 +65,8 @@ AC_PROG_INSTALL
 
 AC_PATH_PROGS(GIT, "git")
 AC_PATH_PROGS(SPARSE, "sparse")
+
+PKG_PROG_PKG_CONFIG
 
 CONFIG_ASCIIDOC="no"
 CONFIG_POD2HTML="no"
@@ -180,7 +183,7 @@ AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
 AC_HEADER_TIME
 
-AC_CHECK_HEADERS(wctype.h)
+AC_CHECK_HEADERS(wchar.h wctype.h)
 AC_CHECK_HEADERS(fcntl.h limits.h time.h unistd.h)
 AC_CHECK_HEADERS(sigaction.h)
 AC_CHECK_HEADERS(arpa/inet.h)
@@ -220,7 +223,10 @@ AC_STRUCT_TM
 AC_C_CONST
 AC_C_INLINE
 AC_MSG_CHECKING([[for C99-conforming inline]])
-AC_COMPILE_IFELSE([[
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#ifdef __cplusplus
+#error noinline
+#endif
 	int add(int change);
 
 	static int sum;
@@ -236,7 +242,7 @@ AC_COMPILE_IFELSE([[
 	sub(int change)
 	{
 		return add(-change);
-	}]],
+	}]])],
 	[AC_MSG_RESULT([[yes]])
 	 AC_DEFINE([NONSTATIC_INLINE], [inline],
 		[Define as inline if the compiler lets you declare a function without inline, then define it with inline, and have that definition refer to identifiers with internal linkage.  This is allowed by C99 6.7.4p6 and 6.7.4p3 together.  Otherwise define as nothing.])],
@@ -283,12 +289,18 @@ AC_CHECK_FUNCS(snprintf vsnprintf asprintf vasprintf)
 AC_CHECK_FUNCS(getifaddrs getpwnam inet_pton inet_ntop)
 AC_CHECK_FUNCS(fflush fsync fseeko ftello sigaction)
 AC_CHECK_FUNCS(gettimeofday clock_gettime)
+AC_CHECK_FUNCS(setitimer, HAVE_SETITIMER=yes)
 
 AC_CHECK_FUNCS([cygwin_conv_to_full_win32_path])
 
 AC_CHECK_FUNCS(setenv putenv, HAVE_SETENV_OR_PUTENV=yes)
+AC_CHECK_FUNCS(unsetenv)
 AC_CHECK_FUNCS(getuid, HAVE_GETUID=yes)
 AC_CHECK_FUNCS(geteuid, HAVE_GETEUID=yes)
+
+AC_CHECK_FUNCS(wcwidth, HAVE_WCWIDTH=yes)
+
+AC_CHECK_FUNCS(fork)
 
 # These aren't probably needed now, as they are commented in links.h.
 # I've no idea about their historical background, but I keep them here
@@ -297,6 +309,8 @@ AC_CHECK_FUNCS(getpid, HAVE_GETPID=yes)
 AC_CHECK_FUNCS(setpgid getpgid setpgrp getpgrp)
 AC_CHECK_FUNCS(raise, HAVE_RAISE=yes)
 AC_CHECK_FUNCS(kill, HAVE_KILL=yes)
+
+AC_CHECK_FUNCS(fpathconf, HAVE_FPATHCONF=yes)
 
 if test x"$HAVE_RAISE" = x; then
 	if test x"$HAVE_KILL" = x || test x"$HAVE_GETPID" = x; then
@@ -433,7 +447,7 @@ AC_DEFUN([EL_CHECK_OPTIONAL_LIBRARY],
 			LIBS="$LIBS -l$4"
 		else
 			if test -n "[$]WITHVAL_$1" &&
-			   test "[$]WITHVAL_$1" != xno; then
+			   test "x[$]WITHVAL_$1" != xno; then
 				AC_MSG_ERROR([$2 not found])
 			fi
 			EL_RESTORE_FLAGS
@@ -472,13 +486,11 @@ EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_GZIP, zlib, zlib.h, z, gzclearerr,
 EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_BZIP2, bzlib, bzlib.h, bz2, BZ2_bzReadOpen,
 	[  --without-bzlib         disable bzlib support])
 
+EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_BROTLI, brotli, brotli/decode.h, brotlidec, BrotliDecoderDecompressStream,
+	[  --with-brotli           enable experimental brotli support])
+
 EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_IDN, idn, idna.h, idn, stringprep_check_version,
 	[  --without-idn           disable international domain names support])
-
-if test "x${with_gc}" != xno; then
-	EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_GC, gc, gc.h, gc, GC_init,
-		[  --with-gc               enable Boehm's garbage collector])
-fi
 
 # LZMA disabled by default, because of little usability and compilation problems
 # with new xz
@@ -568,41 +580,88 @@ fi
 # Check for SpiderMonkey, optional even if installed.
 # ===================================================================
 
-AC_ARG_WITH(spidermonkey, [  --without-spidermonkey  disable SpiderMonkey Mozilla JavaScript engine support],
-            [if test "$withval" = no; then disable_spidermonkey=yes; fi])
-AC_MSG_CHECKING([for SpiderMonkey (1.5 RC3a or later)])
+# This option sets the $with_spidermonkey variable.
+AC_ARG_WITH([spidermonkey],
+	[AS_HELP_STRING([--without-spidermonkey],
+		[disable SpiderMonkey Mozilla JavaScript engine support])])
 
+# CONFIG_SPIDERMONKEY is initially blank.  We change it to "yes" or "no"
+# when we know for sure whether we're going to use SpiderMonkey or not.
+# (features.conf is not supposed to define it.)
+CONFIG_SPIDERMONKEY=
 EL_SAVE_FLAGS
-cf_result=no
 
-if test -z "$disable_spidermonkey"; then
-	if test ! -d "$withval"; then
-		withval="";
+case "$with_spidermonkey" in
+	no)
+		# The user specified --without-spidermonkey.
+		# That overrides the other SpiderMonkey options.
+		AC_MSG_CHECKING([for SpiderMonkey])
+		AC_MSG_RESULT([disabled])
+		CONFIG_SPIDERMONKEY="no"
+		;;
+	"" | yes)
+		;;
+	*)
+		AC_MSG_WARN([This version of ELinks does not support --with-spidermonkey=DIRECTORY.])
+		;;
+esac
+
+# The SpiderMonkey 1.8.5 standalone sources install mozjs185.pc,
+# but the Debian libmozjs-dev package installs mozilla-js.pc.
+# Check mozjs185 first, because it has the version number in the name
+# and therefore is less likely to be a newer incompatible version.
+# (This configure script rejects older incompatible versions
+# but can let newer ones through.)
+for package in mozjs185 mozilla-js; do
+	if test -n "$CONFIG_SPIDERMONKEY"; then
+		break
+	else
+		AC_MSG_CHECKING([for SpiderMonkey (1.8.5 or later) in pkg-config $package])
+		# In pkg-config 0.25, pkg-config --exists mozjs185
+		# returns 0 (success) even if mozjs185 depends on
+		# nspr, which has not been installed.  However,
+		# pkg-config --cflags mozjs185 returns 1 then.
+		if $PKG_CONFIG --cflags --libs $package > /dev/null 2>&AS_MESSAGE_LOG_FD; then
+			SPIDERMONKEY_LIBS="$($PKG_CONFIG --libs $package)"
+			SPIDERMONKEY_CFLAGS="$($PKG_CONFIG --cflags $package)"
+			LIBS="$SPIDERMONKEY_LIBS $LIBS_X"
+			CFLAGS="$CFLAGS_X $SPIDERMONKEY_CFLAGS"
+			CPPFLAGS="$CPPFLAGS_X $SPIDERMONKEY_CFLAGS"
+			AC_LINK_IFELSE(
+				[AC_LANG_PROGRAM([[
+					/* mozilla-js.pc may have -DXP_UNIX or similar in Cflags.
+					 * Avoid warnings about conflicting definitions.  */
+					#if !defined(XP_BEOS) && !defined(XP_OS2) && !defined(XP_UNIX) && !defined(XP_WIN)
+					# define XP_UNIX 1
+					#endif
+					#include <jsapi.h>
+					#ifndef JS_VERSION
+					# error <jsapi.h> did not define JS_VERSION
+					#elif JS_VERSION < 185
+					# error too old
+					#endif]], [])],
+				[CONFIG_SPIDERMONKEY=yes
+				 AC_MSG_RESULT([yes])],
+				[# Leave CONFIG_SPIDERMONKEY blank, to continue the search.
+				 AC_MSG_RESULT([found but unusable])])
+		else
+			AC_MSG_RESULT([no])
+		fi
 	fi
-	for spidermonkeydir in "$withval" "" /usr /usr/local /opt/spidermonkey /opt/js; do
-		for spidermonkeyinclude in "/include" "/include/js" "/include/smjs" "/include/mozjs"; do
-			for spidermonkeylib in js smjs mozjs; do
-				if test "$cf_result" = no &&
-				   test -f "$spidermonkeydir$spidermonkeyinclude/jsapi.h"; then
-					SPIDERMONKEY_LIBS="-L$spidermonkeydir/lib -l$spidermonkeylib"
-					SPIDERMONKEY_CFLAGS="-I$spidermonkeydir$spidermonkeyinclude"
+done
 
-					LIBS="$SPIDERMONKEY_LIBS $LIBS_X"
-					CFLAGS="$CFLAGS_X $SPIDERMONKEY_CFLAGS"
-					CPPFLAGS="$CPPFLAGS_X $SPIDERMONKEY_CFLAGS"
-
-					AC_LINK_IFELSE([AC_LANG_PROGRAM([[#define XP_UNIX
-						     #include <jsapi.h>]], [[JS_GetReservedSlot(NULL, NULL, 0, NULL)]])],[cf_result=yes],[cf_result=no])
-				fi
-			done
-		done
-	done
+if test -z "$CONFIG_SPIDERMONKEY"; then
+	# Didn't find SpiderMonkey anywhere.
+	CONFIG_SPIDERMONKEY=no
 fi
 
-AC_MSG_RESULT($cf_result)
-CONFIG_SPIDERMONKEY="$cf_result"
-if test "$cf_result" = "yes"; then
-	AC_CHECK_FUNCS([[JS_ReportAllocationOverflow]])
+if test "$CONFIG_SPIDERMONKEY" = "yes"; then
+	# LIBS, CFLAGS, and CPPFLAGS still include the SpiderMonkey options.
+	AC_CHECK_FUNCS([JS_ReportAllocationOverflow])
+	AC_CHECK_FUNCS([JS_SetBranchCallback])
+	AC_CHECK_FUNCS([JS_TriggerOperationCallback], [HAVE_JS_TRIGGEROPERATIONCALLBACK=yes])
+elif test -n "$with_spidermonkey" && test "x$with_spidermonkey" != "xno"; then
+	AC_MSG_WARN([SpiderMonkey was not found even though you specified --with-spidermonkey.])
 fi
 EL_RESTORE_FLAGS
 
@@ -614,6 +673,15 @@ fi
 
 EL_CONFIG_DEPENDS(CONFIG_ECMASCRIPT, [CONFIG_ECMASCRIPT_SMJS], [ECMAScript (JavaScript)])
 AC_SUBST(CONFIG_ECMASCRIPT_SMJS)
+
+if test "x$CONFIG_ECMASCRIPT_SMJS" = xyes &&
+   test "x$HAVE_JS_TRIGGEROPERATIONCALLBACK" = xyes &&
+   test "x$HAVE_SETITIMER" = xyes; then
+	EL_CONFIG(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT, [ECMAScript heartbeat support])
+else
+	CONFIG_ECMASCRIPT_SMJS_HEARTBEAT=no
+fi
+AC_SUBST(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
 
 
 # ===================================================================
@@ -834,10 +902,10 @@ if test -z "$disable_lua"; then
 		withval="";
 	fi
 	for luadir in "$withval" "" /usr /usr/local; do
-		for suffix in "" 50; do
+		for suffix in "" 5.1 51; do
 			if test "$cf_result" = no && ( test -f "$luadir/include/lua.h" || \
 			   test -f "$luadir/include/lua$suffix/lua.h" ) ; then
-				LUA_LIBS="-L$luadir/lib -llua$suffix -llualib$suffix -lm"
+				LUA_LIBS="-L$luadir/lib -llua$suffix -lm"
 				LUA_CFLAGS="-I$luadir/include -I$luadir/include/lua$suffix"
 
 				LIBS="$LUA_LIBS $LIBS_X"
@@ -845,13 +913,11 @@ if test -z "$disable_lua"; then
 				CPPFLAGS="$CPPFLAGS_X $LUA_CFLAGS"
 
 				# Check that it is a compatible Lua version
-				AC_LINK_IFELSE([AC_LANG_PROGRAM([[	#include <lua.h>
-						#include <lualib.h>]], [[	lua_State *L = lua_open();
-						luaopen_base(L);
-						luaopen_table(L);
-						luaopen_io(L);
-						luaopen_string(L);
-						luaopen_math(L);
+				AC_LINK_IFELSE([AC_LANG_PROGRAM([[	#include <lauxlib.h>]
+						#include <lua.h>
+						#include <lualib.h>
+						], [[	lua_State *L = luaL_newstate();
+						luaL_openlibs(L);
 						lua_pushboolean(L, 1);
 						lua_close(L);]])],[cf_result=yes],[cf_result=no])
 			fi
@@ -884,6 +950,9 @@ fi
 #
 # After any --enable-utf-8 and --disable-utf-8 options have been
 # handled, a separate section decides whether to actually use TRE.
+#
+# tre version 0.8.0 or higher is required which have the "tre_" prefix
+# for functions.
 
 AC_ARG_WITH([[tre]], [[  --without-tre           disable TRE regex search support]])
 if test "$with_tre" = no; then
@@ -892,9 +961,9 @@ if test "$with_tre" = no; then
 	tre_log="no (explicitly disabled)"
 else
 	AC_MSG_CHECKING([[for TRE in pkg-config]])
-	if pkg-config tre; then
-		TRE_CFLAGS=`pkg-config --cflags tre`
-		TRE_LIBS=`pkg-config --libs tre`
+	if $PKG_CONFIG tre; then
+		TRE_CFLAGS=`$PKG_CONFIG --cflags tre`
+		TRE_LIBS=`$PKG_CONFIG --libs tre`
 		AC_MSG_RESULT([[yes]])
 	else
 		# <http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=513055>
@@ -909,11 +978,11 @@ else
 	EL_SAVE_FLAGS
 	CFLAGS="$TRE_CFLAGS $CFLAGS"
 	LIBS="$TRE_LIBS $LIBS" # must be first, because of regfree conflict
-	AC_TRY_LINK([#include <tre/regex.h>],
+	AC_TRY_LINK([#include <tre/tre.h>],
 		    [regex_t re;
 		     regmatch_t match[1];
-		     regwcomp(&re, L"zap", REG_ICASE);
-		     regwexec(&re, L"ELIZAPROGRAM", 1, match, 0);],
+		     tre_regwcomp(&re, L"zap", REG_ICASE);
+		     tre_regwexec(&re, L"ELIZAPROGRAM", 1, match, 0);],
 		    [AC_MSG_RESULT([[yes]])
 		     tre_log="available"],
 		    [AC_MSG_RESULT([[no]])
@@ -969,6 +1038,53 @@ AC_ARG_WITH(openssl, [[  --with-openssl[=DIR]    enable OpenSSL support (default
 		"no")	: ;;
 		*)	chosen_ssl_library="OpenSSL" ;;
 	     esac])
+
+AC_ARG_WITH(nss_compat_ossl, [[  --with-nss_compat_ossl[=DIR]
+                          NSS compatibility SSL libraries/include files]],
+	    [case "$with_nss_compat_ossl" in
+		"no")	: ;;
+		*)	chosen_ssl_library="nss_compat_ossl" ;;
+	     esac])
+
+# ---- nss_compat_ossl
+
+if test "$with_nss_compat_ossl" = no; then
+	# explicitly disabled
+	:
+elif test -n "$chosen_ssl_library" && test "$chosen_ssl_library" != "nss_compat_ossl"; then
+	# not used, because $chosen_ssl_library was chosen
+	:
+elif test -z "${with_nss_compat_ossl+set}"; then
+	# SSL_library_init() in nss_compat_ossl 0.9.2 calls exit(1)
+	# with no error message if there is no certificate database.
+	# https://bugzilla.redhat.com/show_bug.cgi?id=463437
+	# So ELinks uses nss_compat_ossl only if explicitly requested.
+	:
+else
+	EL_SAVE_FLAGS
+	if test "$with_nss_compat_ossl" = yes; then
+		if $PKG_CONFIG nss; then
+			CFLAGS="$CFLAGS_X `$PKG_CONFIG --cflags nss`"
+			LIBS="$LIBS_X `$PKG_CONFIG --libs nss`"
+		else
+			with_nss_compat_ossl=no
+		fi
+	else
+		# Without pkg-config, we'll kludge in some defaults
+		CFLAGS="$CFLAGS_X -I$with_nss_compat_ossl/include -I/usr/include/nss3 -I/usr/include/nspr4"
+		LIBS="$LIBS_X -L$with_nss_compat_ossl/lib -lssl3 -lsmime3 -lnss3 -lplds4 -lplc4 -lnspr4 -lpthread -ldl"
+	fi
+	AC_CHECK_HEADERS(nss_compat_ossl/nss_compat_ossl.h,, [with_nss_compat_ossl=no], [#define NSS_COMPAT_OSSL_H])
+	AC_CHECK_LIB(nss_compat_ossl, X509_free,, [with_nss_compat_ossl=no])
+
+	if test "$with_nss_compat_ossl" = "no"; then
+		EL_RESTORE_FLAGS
+	else
+		LIBS="$LIBS -lnss_compat_ossl"
+		EL_CONFIG(CONFIG_NSS_COMPAT_OSSL, [nss_compat_ossl])
+		chosen_ssl_library="nss_compat_ossl"
+	fi
+fi
 
 # ---- OpenSSL
 
@@ -1043,9 +1159,9 @@ elif test -n "$chosen_ssl_library" && test "$chosen_ssl_library" != "GNUTLS"; th
 else
 	cf_result=no
 	AC_MSG_CHECKING([[for GNUTLS (1.2 or later) in pkg-config]])
-	if pkg-config --atleast-version=1.2 gnutls; then
-		GNUTLS_CFLAGS=`pkg-config --cflags gnutls`
-		GNUTLS_LIBS=`pkg-config --libs gnutls`
+	if $PKG_CONFIG --atleast-version=1.2 gnutls; then
+		GNUTLS_CFLAGS=`$PKG_CONFIG --cflags gnutls`
+		GNUTLS_LIBS=`$PKG_CONFIG --libs gnutls`
 		AC_MSG_RESULT([[yes: $GNUTLS_CFLAGS $GNUTLS_LIBS]])
 
 		EL_SAVE_FLAGS
@@ -1082,7 +1198,12 @@ else
 		EL_CONFIG(CONFIG_GNUTLS, [GNUTLS])
 		chosen_ssl_library="GNUTLS"
 
-		LIBS="$GNUTLS_LIBS $LIBS"
+		# gcry_create_nounce is part of libgcrypt
+		LIBGCRYPT_CFLAGS=`libgcrypt-config --cflags`
+		LIBGCRYPT_LIBS=`libgcrypt-config --libs`
+
+		LIBS="$LIBGCRYPT_LIBS $GNUTLS_LIBS $LIBS"
+		AC_SUBST(LIBGCRYPT_CFLAGS)
 		AC_SUBST(GNUTLS_CFLAGS)
 
 	elif test "${with_gnutls-no}" != "no"; then
@@ -1092,10 +1213,11 @@ fi
 
 # Final SSL setup
 
-EL_CONFIG_DEPENDS(CONFIG_SSL, [CONFIG_OPENSSL CONFIG_GNUTLS], [SSL])
+EL_CONFIG_DEPENDS(CONFIG_SSL, [CONFIG_OPENSSL CONFIG_GNUTLS CONFIG_NSS_COMPAT_OSSL], [SSL])
 AC_SUBST(CONFIG_GNUTLS_OPENSSL_COMPAT)
 AC_SUBST(CONFIG_OPENSSL)
 AC_SUBST(CONFIG_GNUTLS)
+AC_SUBST(CONFIG_NSS_COMPAT_OSSL)
 
 #endif
 
@@ -1163,6 +1285,9 @@ AC_CHECK_HEADERS(execinfo.h, HAVE_EXECINFO=yes, HAVE_EXECINFO=no)
 ALL_LINGUAS="af be bg ca cs da de el es et fi fr gl hr hu id is it lt nl nb pl pt pt_BR ro ru sk sr sv tr uk"
 
 AM_GNU_GETTEXT
+
+# iconv is always used
+LIBS="$LIBS $LIBICONV"
 
 dnl AC_MSG_CHECKING([how many characters your English alphabet has])
 dnl # f33r d4 l33t... I hope it's portable. :)
@@ -1333,6 +1458,9 @@ EL_ARG_ENABLE(CONFIG_SMALL, small, [Small binary],
 EL_ARG_ENABLE(CONFIG_UTF8, utf-8, [UTF-8],
 	      [  --disable-utf-8         disable UTF-8 support])
 
+EL_ARG_DEPEND(CONFIG_COMBINE, combining, [CONFIG_UTF8:yes HAVE_WCWIDTH:yes], [Combining characters],
+	      [  --enable-combining      support Unicode combining characters (experimental)])
+
 
 AC_ARG_ENABLE(weehoofooboomookerchoo,
               [
@@ -1435,6 +1563,37 @@ AC_SUBST(TRE_CFLAGS)
 AC_SUBST(TRE_LIBS)
 EL_LOG_CONFIG([CONFIG_TRE], [[Regexp searching]], [[$tre_log]])
 
+# ===================================================================
+# libdom
+# ===================================================================
+
+LIBDOM_CFLAGS=
+LIBDOM_LIBS=
+CONFIG_LIBDOM=no
+enable_libdom=no
+
+AC_ARG_WITH(libdom, [  --with-libdom           enable libdom],
+            [ if test "x$withval" != xno; then enable_libdom=yes; fi ])
+
+if test "$enable_libdom" = no; then
+	AC_MSG_CHECKING([[for libdom]])
+	AC_MSG_RESULT([[disabled]])
+else
+	AC_MSG_CHECKING([[for libdom in pkg-config]])
+	if $PKG_CONFIG libdom; then
+		LIBDOM_CFLAGS=`$PKG_CONFIG --cflags libdom`
+		LIBDOM_LIBS=`$PKG_CONFIG --libs libdom`
+		LIBS="$LIBDOM_LIBS $LIBS"
+		CONFIG_LIBDOM=yes
+		AC_DEFINE([CONFIG_LIBDOM], [1], [Define as 1 to use the libdom library.])
+		AC_MSG_RESULT([[yes]])
+	else
+		enable_libdom=no
+	fi
+fi
+AC_SUBST(LIBDOM_CFLAGS)
+AC_SUBST(LIBDOM_LIBS)
+EL_LOG_CONFIG([CONFIG_LIBDOM], [[libdom]], [[$enable_libdom]])
 
 # ===================================================================
 # Further LDFLAGS tweaks
@@ -1550,11 +1709,13 @@ fi
 # A little fine tuning of gcc specific options (continued)
 # ===================================================================
 
+GETTEXT_CFLAGS=
 if test "x$ac_cv_c_compiler_gnu" = "xyes"; then
   if test "$CONFIG_DEBUG" = "yes"; then
     # We want to see all warnings and live with none (in debug mode).
     CFLAGS="$CFLAGS -Werror"
   fi
+  GETTEXT_CFLAGS="-Wno-uninitialized"
 
   case "`$CC -dumpversion`" in
     3.0|3.1|3.2)
@@ -1567,7 +1728,10 @@ if test "x$ac_cv_c_compiler_gnu" = "xyes"; then
       # alternative is just too ugly. Thanks gcc guys!! ;)
       CFLAGS="$CFLAGS -fno-strict-aliasing"
       ;;
-    4.*)
+    4.5*)
+      CFLAGS="$CFLAGS -fno-strict-aliasing -Wno-pointer-sign -Wno-enum-compare"
+      ;;
+    4.*|5.*|6.*)
       # Do not show warnings related to (char * | unsigned char *) type
       # difference.
       CFLAGS="$CFLAGS -fno-strict-aliasing -Wno-pointer-sign"
@@ -1652,6 +1816,7 @@ if test "x$ac_cv_c_compiler_gnu" = "xyes"; then
   done
 fi
 
+AC_SUBST(GETTEXT_CFLAGS)
 EL_LOG_CONFIG(CFLAGS, [Compiler flags (CFLAGS)], [])
 EL_LOG_CONFIG(CPPFLAGS, [Preprocessor flags (CPPFLAGS)], [])
 EL_LOG_CONFIG(LDFLAGS, [Linker flags (LDFLAGS)], [])

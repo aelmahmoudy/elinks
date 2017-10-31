@@ -90,7 +90,7 @@ add_mime_extension(void *data)
 	add_optname_to_string(&name, ext->ext, strlen(ext->ext));
 
 	really_del_ext(ext->ext_orig); /* ..or rename ;) */
-	safe_strncpy(get_opt_str(name.source), ext->ct, MAX_STR_LEN);
+	safe_strncpy(get_opt_str(name.source, NULL), ext->ct, MAX_STR_LEN);
 	option_changed(NULL, get_opt_rec(config_options, name.source));
 	done_string(&name);
 }
@@ -99,25 +99,25 @@ void
 menu_add_ext(struct terminal *term, void *fcp, void *xxx2)
 {
 	/* [gettext_accelerator_context(menu_add_ext)] */
-	struct extension *new;
+	struct extension *new_;
 	struct dialog *dlg;
 
 #define MIME_WIDGETS_COUNT 4
-	dlg = calloc_dialog(MIME_WIDGETS_COUNT, sizeof(*new));
+	dlg = calloc_dialog(MIME_WIDGETS_COUNT, sizeof(*new_));
 	if (!dlg) {
 		mem_free_if(fcp);
 		return;
 	}
 
-	new = (struct extension *) get_dialog_offset(dlg, MIME_WIDGETS_COUNT);
+	new_ = (struct extension *) get_dialog_offset(dlg, MIME_WIDGETS_COUNT);
 
 	if (fcp) {
 		struct option *opt = get_real_opt("mime.extension", fcp);
 
 		if (opt) {
-			safe_strncpy(new->ext, fcp, MAX_STR_LEN);
-			safe_strncpy(new->ct, opt->value.string, MAX_STR_LEN);
-			safe_strncpy(new->ext_orig, fcp, MAX_STR_LEN);
+			safe_strncpy(new_->ext, fcp, MAX_STR_LEN);
+			safe_strncpy(new_->ct, opt->value.string, MAX_STR_LEN);
+			safe_strncpy(new_->ext_orig, fcp, MAX_STR_LEN);
 		}
 
 		mem_free(fcp);
@@ -126,10 +126,10 @@ menu_add_ext(struct terminal *term, void *fcp, void *xxx2)
 	dlg->title = _("Extension", term);
 	dlg->layouter = generic_dialog_layouter;
 
-	add_dlg_field(dlg, _("Extension(s)", term), 0, 0, check_nonempty, MAX_STR_LEN, new->ext, NULL);
-	add_dlg_field(dlg, _("Content-Type", term), 0, 0, check_nonempty, MAX_STR_LEN, new->ct, NULL);
+	add_dlg_field(dlg, _("Extension(s)", term), 0, 0, check_nonempty, MAX_STR_LEN, new_->ext, NULL);
+	add_dlg_field(dlg, _("Content-Type", term), 0, 0, check_nonempty, MAX_STR_LEN, new_->ct, NULL);
 
-	add_dlg_ok_button(dlg, _("~OK", term), B_ENTER, add_mime_extension, new);
+	add_dlg_ok_button(dlg, _("~OK", term), B_ENTER, add_mime_extension, new_);
 	add_dlg_button(dlg, _("~Cancel", term), B_ESC, cancel_dialog, NULL);
 
 	add_dlg_end(dlg, MIME_WIDGETS_COUNT);
@@ -147,7 +147,7 @@ void
 menu_list_ext(struct terminal *term, void *fn_, void *xxx)
 {
 	menu_func_T fn = fn_;
-	LIST_OF(struct option) *opt_tree = get_opt_tree("mime.extension");
+	LIST_OF(struct option) *opt_tree = get_opt_tree("mime.extension", NULL);
 	struct option *opt;
 	struct menu_item *mi = NULL;
 

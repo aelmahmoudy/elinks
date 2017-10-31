@@ -193,7 +193,7 @@ get_validated_cache_entry(struct uri *uri, enum cache_mode cache_mode)
 	 * remove the redirect or the entry expired. Please enlighten me.
 	 * --jonas */
 	if ((cached->cache_mode == CACHE_MODE_NEVER && cache_mode != CACHE_MODE_ALWAYS)
-	    || (cached->redirect && !get_opt_bool("document.cache.cache_redirects"))
+	    || (cached->redirect && !get_opt_bool("document.cache.cache_redirects", NULL))
 	    || (cached->expire && cache_entry_has_expired(cached))) {
 		if (!is_object_used(cached)) delete_cache_entry(cached);
 		return NULL;
@@ -202,8 +202,8 @@ get_validated_cache_entry(struct uri *uri, enum cache_mode cache_mode)
 	if (cached->cache_mode <= CACHE_MODE_CHECK_IF_MODIFIED
 	    && cache_mode <= CACHE_MODE_CHECK_IF_MODIFIED
 	    && (cached->last_modified || cached->etag)
-	    && get_opt_int("document.cache.revalidation_interval") >= 0) {
-		if (cached->seconds + get_opt_int("document.cache.revalidation_interval") < time(NULL))
+	    && get_opt_int("document.cache.revalidation_interval", NULL) >= 0) {
+		if (cached->seconds + get_opt_int("document.cache.revalidation_interval", NULL) < time(NULL))
 			return NULL;
 	}
 
@@ -723,6 +723,25 @@ redirect_cache(struct cache_entry *cached, unsigned char *location,
 
 	if (!uristring) return NULL;
 
+#ifdef CONFIG_SCRIPTING
+	{
+	static int follow_url_event_id = EVENT_NONE;
+
+	set_event_id(follow_url_event_id, "follow-url");
+	trigger_event(follow_url_event_id, &uristring, NULL);
+
+	if (!uristring || !*uristring) {
+		mem_free_if(uristring);
+		return NULL;
+	}
+
+	/* FIXME: Compare if uristring and struri(uri) are equal */
+	/* FIXME: When uri->post will no longer be an encoded string (but
+	 * hopefully some refcounted object) we will have to assign the post
+	 * data object to the translated URI. */
+	}
+#endif
+
 	/* Only add the post data if the redirect should not use GET method.
 	 * This is tied to the HTTP handling of the 303 and (if the
 	 * protocol.http.bugs.broken_302_redirect is enabled) the 302 status
@@ -735,7 +754,7 @@ redirect_cache(struct cache_entry *cached, unsigned char *location,
 
 		/* To be certain we don't append post data twice in some
 		 * conditions... --Zas */
-		assert(!strchr(uristring, POST_CHAR));
+		assert(!strchr((const char *)uristring, POST_CHAR));
 
 		add_to_strn(&uristring, cached->uri->post - 1);
 	}
@@ -761,7 +780,7 @@ garbage_collection(int whole)
 	/* The maximal cache size tolerated by user. Note that this is only
 	 * size of the "just stored" unused cache entries, used cache entries
 	 * are not counted to that. */
-	unsigned longlong opt_cache_size = get_opt_long("document.cache.memory.size");
+	unsigned longlong opt_cache_size = get_opt_long("document.cache.memory.size", NULL);
 	/* The low-treshold cache size. Basically, when the cache size is
 	 * higher than opt_cache_size, we free the cache so that there is no
 	 * more than this value in the cache anymore. This is to make sure we
@@ -903,7 +922,7 @@ shrinked_enough:
 		DBG("garbage collection doesn't work, cache size %ld > %ld, "
 		      "document.cache.memory.size set to: %ld bytes",
 		      cache_size, gc_cache_size,
-		      get_opt_long("document.cache.memory.size"));
+		      get_opt_long("document.cache.memory.size", NULL));
 	}
 #endif
 }

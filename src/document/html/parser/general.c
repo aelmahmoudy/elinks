@@ -159,18 +159,18 @@ html_font(struct html_context *html_context, unsigned char *a,
 		}
 		mem_free(al);
 	}
-	get_color(html_context, a, "color", &format.style.fg);
+	get_color(html_context, a, "color", &format.style.color.foreground);
 }
 
 void
 html_body(struct html_context *html_context, unsigned char *a,
           unsigned char *xxx3, unsigned char *xxx4, unsigned char **xxx5)
 {
-	get_color(html_context, a, "text", &format.style.fg);
-	get_color(html_context, a, "link", &format.clink);
-	get_color(html_context, a, "vlink", &format.vlink);
+	get_color(html_context, a, "text", &format.style.color.foreground);
+	get_color(html_context, a, "link", &format.color.clink);
+	get_color(html_context, a, "vlink", &format.color.vlink);
 
-	if (get_bgcolor(html_context, a, &format.style.bg) != -1)
+	if (get_bgcolor(html_context, a, &format.style.color.background) != -1)
 		html_context->was_body_background = 1;
 
 	html_context->was_body = 1; /* this will be used by "meta inside body" */
@@ -188,17 +188,17 @@ html_apply_canvas_bgcolor(struct html_context *html_context)
 		          &html_context->stack);
 #endif
 
-	if (par_format.bgcolor != format.style.bg) {
+	if (par_format.color.background != format.style.color.background) {
 		/* Modify the root HTML element - format_html_part() will take
 		 * this from there. */
 		struct html_element *e = html_bottom;
 
 		html_context->was_body_background = 1;
-		e->parattr.bgcolor = e->attr.style.bg = par_format.bgcolor = format.style.bg;
+		e->parattr.color.background = e->attr.style.color.background = par_format.color.background = format.style.color.background;
 	}
 
 	if (html_context->has_link_lines
-	    && par_format.bgcolor != html_context->options->default_style.bg
+	    && par_format.color.background != html_context->options->default_style.color.background
 	    && !search_html_stack(html_context, "BODY")) {
 		html_context->special_f(html_context, SP_COLOR_LINK_LINES);
 	}
@@ -287,7 +287,7 @@ not_processed:
 		unsigned char *import_url;
 		struct uri *uri;
 
-		if (!get_opt_bool("ecmascript.enable")) {
+		if (!get_opt_bool("ecmascript.enable", NULL)) {
 			mem_free(src);
 			goto not_processed;
 		}
@@ -417,8 +417,8 @@ html_html(struct html_context *html_context, unsigned char *a,
 	 * this from there. */
 	struct html_element *e = html_bottom;
 
-	if (par_format.bgcolor != format.style.bg)
-		e->parattr.bgcolor = e->attr.style.bg = par_format.bgcolor = format.style.bg;
+	if (par_format.color.background != format.style.color.background)
+		e->parattr.color.background = e->attr.style.color.background = par_format.color.background = format.style.color.background;
 }
 
 void
@@ -454,7 +454,9 @@ html_handle_body_meta(struct html_context *html_context, unsigned char *meta,
 
 	if (!init_string(&head)) return;
 
-	scan_http_equiv(meta, eof, &head, NULL, html_context->options);
+	/* FIXME (bug 784): cp is the terminal charset;
+	 * should use the document charset instead.  */
+	scan_http_equiv(meta, eof, &head, NULL, html_context->options->cp);
 	process_head(html_context, head.source);
 	done_string(&head);
 }
@@ -742,14 +744,16 @@ html_ul(struct html_context *html_context, unsigned char *a,
 	/* dump_html_stack(html_context); */
 	par_format.list_level++;
 	par_format.list_number = 0;
-	par_format.flags = P_STAR;
+	par_format.flags = P_DISC;
 
 	al = get_attr_val(a, "type", html_context->doc_cp);
 	if (al) {
-		if (!c_strcasecmp(al, "disc") || !c_strcasecmp(al, "circle"))
+		if (!c_strcasecmp(al, "disc"))
+			par_format.flags = P_DISC;
+		else if (!c_strcasecmp(al, "circle"))
 			par_format.flags = P_O;
 		else if (!c_strcasecmp(al, "square"))
-			par_format.flags = P_PLUS;
+			par_format.flags = P_SQUARE;
 		mem_free(al);
 	}
 	par_format.leftmargin += 2 + (par_format.list_level > 1);
@@ -822,23 +826,22 @@ static struct {
 };
 
 static void
-roman(unsigned char *p, unsigned n)
+roman(struct string  *p, unsigned n)
 {
 	int i = 0;
 
 	if (n >= 4000) {
-		strcpy(p, "---");
+		add_to_string(p, "---");
 		return;
 	}
 	if (!n) {
-		strcpy(p, "o");
+		add_to_string(p, "o");
 		return;
 	}
-	p[0] = 0;
 	while (n) {
 		while (roman_tbl[i].n <= n) {
 			n -= roman_tbl[i].n;
-			strcat(p, roman_tbl[i].s);
+			add_to_string(p, roman_tbl[i].s);
 		}
 		i++;
 		assertm(!(n && !roman_tbl[i].n),
@@ -851,6 +854,8 @@ void
 html_li(struct html_context *html_context, unsigned char *a,
         unsigned char *xxx3, unsigned char *xxx4, unsigned char **xxx5)
 {
+	int t = par_format.flags & P_LISTMASK;
+
 	/* When handling the code <li><li> @was_li will be 1 and it means we
 	 * have to insert a line break since no list item content has done it
 	 * for us. */
@@ -861,56 +866,66 @@ html_li(struct html_context *html_context, unsigned char *a,
 
 	/*kill_html_stack_until(html_context, 0
 	                      "", "UL", "OL", NULL);*/
-	if (!par_format.list_number) {
-		unsigned char x[7] = "*&nbsp;";
-		int t = par_format.flags & P_LISTMASK;
-
-		if (t == P_O) x[0] = 'o';
-		if (t == P_PLUS) x[0] = '+';
-		put_chrs(html_context, x, 7);
+	if (t == P_NO_BULLET) {
+		/* Print nothing. */
+	} else if (!par_format.list_number) {
+		if (t == P_O) /* Print U+25E6 WHITE BULLET. */
+			put_chrs(html_context, "&#9702;", 7);
+		else if (t == P_SQUARE) /* Print U+25AA BLACK SMALL SQUARE. */
+			put_chrs(html_context, "&#9642;", 7);
+		else /* Print U+2022 BULLET. */
+			put_chrs(html_context, "&#8226;", 7);
+		put_chrs(html_context, "&nbsp;", 6);
 		par_format.leftmargin += 2;
 		par_format.align = ALIGN_LEFT;
 
 	} else {
 		unsigned char c = 0;
-		unsigned char n[32];
 		int nlen;
 		int t = par_format.flags & P_LISTMASK;
 		int s = get_num(a, "value", html_context->doc_cp);
+		struct string n;
+
+		if (!init_string(&n)) return;
 
 		if (s != -1) par_format.list_number = s;
 
 		if (t == P_ALPHA || t == P_alpha) {
+			unsigned char n0;
+
 			put_chrs(html_context, "&nbsp;", 6);
 			c = 1;
-			n[0] = par_format.list_number
+			n0 = par_format.list_number
 			       ? (par_format.list_number - 1) % 26
 			         + (t == P_ALPHA ? 'A' : 'a')
 			       : 0;
-			n[1] = 0;
+			if (n0) add_char_to_string(&n, n0);
 
 		} else if (t == P_ROMAN || t == P_roman) {
-			roman(n, par_format.list_number);
+			roman(&n, par_format.list_number);
 			if (t == P_ROMAN) {
 				unsigned char *x;
 
-				for (x = n; *x; x++) *x = c_toupper(*x);
+				for (x = n.source; *x; x++) *x = c_toupper(*x);
 			}
 
 		} else {
+			unsigned char n0[64];
 			if (par_format.list_number < 10) {
 				put_chrs(html_context, "&nbsp;", 6);
 				c = 1;
 			}
 
-			ulongcat(n, NULL, par_format.list_number, (sizeof(n) - 1), 0);
+			ulongcat(n0, NULL, par_format.list_number, (sizeof(n) - 1), 0);
+			add_to_string(&n, n0);
 		}
 
-		nlen = strlen(n);
-		put_chrs(html_context, n, nlen);
+		nlen = n.length;
+		put_chrs(html_context, n.source, nlen);
 		put_chrs(html_context, ".&nbsp;", 7);
 		par_format.leftmargin += nlen + c + 2;
 		par_format.align = ALIGN_LEFT;
+		done_string(&n);
 
 		{
 			struct html_element *element;
@@ -1106,8 +1121,8 @@ html_noscript(struct html_context *html_context, unsigned char *a,
 	/* We shouldn't throw <noscript> away until our ECMAScript support is
 	 * halfway decent. */
 #ifdef CONFIG_ECMASCRIPT
-	if (get_opt_bool("ecmascript.enable")
-            && get_opt_bool("ecmascript.ignore_noscript"))
+	if (get_opt_bool("ecmascript.enable", NULL)
+            && get_opt_bool("ecmascript.ignore_noscript", NULL))
 		html_skip(html_context, a);
 #endif
 }

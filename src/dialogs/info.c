@@ -18,7 +18,8 @@
 #include "config/kbdbind.h"
 #include "config/options.h"
 #include "dialogs/info.h"
-#include "document/html/renderer.h"
+#include "document/renderer.h"
+#include "ecmascript/ecmascript.h"
 #include "intl/gettext/libintl.h"
 #include "main/select.h"
 #include "main/timer.h"
@@ -101,7 +102,7 @@ menu_keys(struct terminal *term, void *d_, void *xxx)
 
 	if (info->toggle) {
 		action_id_T action_id;
-		enum keymap_id keymap_id;
+		int keymap_id;
 
 		for (action_id = 0; action_id < MAIN_ACTIONS - 1; action_id++) {
 			action_ids[action_id] = action_id + 1;
@@ -230,6 +231,15 @@ get_resource_info(struct terminal *term, void *data)
 	val = get_format_cache_refresh_count();
 	val_add(n_("%ld refreshing", "%ld refreshing", val, term));
 	add_to_string(&info, ".\n");
+
+#ifdef CONFIG_ECMASCRIPT
+	add_to_string(&info, _("ECMAScript", term));
+	add_to_string(&info, ": ");
+
+	val = ecmascript_get_interpreter_count();
+	val_add(n_("%ld interpreter", "%ld interpreters", val, term));
+	add_to_string(&info, ".\n");
+#endif
 
 	add_to_string(&info, _("Interlinking", term));
 	add_to_string(&info, ": ");

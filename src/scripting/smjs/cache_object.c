@@ -40,7 +40,7 @@ static const JSPropertySpec cache_entry_props[] = {
 
 /* @cache_entry_class.getProperty */
 static JSBool
-cache_entry_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+cache_entry_get_property(JSContext *ctx, JSObject *obj, jsid id, jsval *vp)
 {
 	struct cache_entry *cached;
 	JSBool ret;
@@ -66,13 +66,16 @@ cache_entry_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 
 	undef_to_jsval(ctx, vp);
 
-	if (!JSVAL_IS_INT(id))
+	if (!JSID_IS_INT(id))
 		ret = JS_FALSE;
-	else switch (JSVAL_TO_INT(id)) {
+	else switch (JSID_TO_INT(id)) {
 	case CACHE_ENTRY_CONTENT: {
 		struct fragment *fragment = get_cache_fragment(cached);
 
-		assert(fragment);
+		if (!fragment) {
+			ret = JS_FALSE;
+			break;
+		}
 
 		*vp = STRING_TO_JSVAL(JS_NewStringCopyN(smjs_ctx,
 	                                                fragment->data,
@@ -121,7 +124,7 @@ cache_entry_get_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 
 /* @cache_entry_class.setProperty */
 static JSBool
-cache_entry_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
+cache_entry_set_property(JSContext *ctx, JSObject *obj, jsid id, JSBool strict, jsval *vp)
 {
 	struct cache_entry *cached;
 	JSBool ret;
@@ -145,12 +148,12 @@ cache_entry_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	 * eventually unlock the object.  */
 	object_lock(cached);
 
-	if (!JSVAL_IS_INT(id))
+	if (!JSID_IS_INT(id))
 		ret = JS_FALSE;
-	else switch (JSVAL_TO_INT(id)) {
+	else switch (JSID_TO_INT(id)) {
 	case CACHE_ENTRY_CONTENT: {
 		JSString *jsstr = JS_ValueToString(smjs_ctx, *vp);
-		unsigned char *str = JS_GetStringBytes(jsstr);
+		unsigned char *str = JS_EncodeString(smjs_ctx, jsstr);
 		size_t len = JS_GetStringLength(jsstr);
 
 		add_fragment(cached, 0, str, len);
@@ -161,7 +164,7 @@ cache_entry_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	}
 	case CACHE_ENTRY_TYPE: {
 		JSString *jsstr = JS_ValueToString(smjs_ctx, *vp);
-		unsigned char *str = JS_GetStringBytes(jsstr);
+		unsigned char *str = JS_EncodeString(smjs_ctx, jsstr);
 
 		mem_free_set(&cached->content_type, stracpy(str));
 
@@ -170,7 +173,7 @@ cache_entry_set_property(JSContext *ctx, JSObject *obj, jsval id, jsval *vp)
 	}
 	case CACHE_ENTRY_HEAD: {
 		JSString *jsstr = JS_ValueToString(smjs_ctx, *vp);
-		unsigned char *str = JS_GetStringBytes(jsstr);
+		unsigned char *str = JS_EncodeString(smjs_ctx, jsstr);
 
 		mem_free_set(&cached->head, stracpy(str));
 
