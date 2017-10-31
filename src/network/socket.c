@@ -260,6 +260,7 @@ make_connection(struct socket *socket, struct uri *uri,
 	unsigned char *host = get_uri_string(uri, URI_DNS_HOST);
 	struct connect_info *connect_info;
 	enum dns_result result;
+	enum blacklist_flags verify;
 
 	socket->ops->set_timeout(socket, connection_state(0));
 
@@ -284,6 +285,9 @@ make_connection(struct socket *socket, struct uri *uri,
 		socket->no_tls = ((flags & SERVER_BLACKLIST_NO_TLS) != 0);
 		socket->set_no_tls = 1;
 	}
+
+	verify = get_blacklist_flags(uri);
+	socket->verify = ((verify & SERVER_BLACKLIST_NO_CERT_VERIFY) == 0);
 
 	debug_transfer_log("\nCONNECTION: ", -1);
 	debug_transfer_log(host, -1);
@@ -541,9 +545,9 @@ connect_socket(struct socket *csocket, struct connection_state state)
 	int saved_errno = 0;
 	int at_least_one_remote_ip = 0;
 #ifdef CONFIG_IPV6
-	int try_ipv6 = get_opt_bool("connection.try_ipv6");
+	int try_ipv6 = get_opt_bool("connection.try_ipv6", NULL);
 #endif
-	int try_ipv4 = get_opt_bool("connection.try_ipv4");
+	int try_ipv4 = get_opt_bool("connection.try_ipv4", NULL);
 	/* We tried something but we failed in such a way that we would rather
 	 * prefer the connection to retain the information about previous
 	 * failures.  That is, we i.e. decided we are forbidden to even think
@@ -716,7 +720,13 @@ generic_write(struct socket *socket, unsigned char *data, int len)
 
 	if (!wr) return SOCKET_CANT_WRITE;
 
-	return wr < 0 ? SOCKET_SYSCALL_ERROR : wr;
+	if (wr < 0) {
+#ifdef EWOULDBLOCK
+		if (errno == EWOULDBLOCK) return SOCKET_CANT_WRITE;
+#endif
+		return SOCKET_SYSCALL_ERROR;
+	}
+	return wr;
 }
 
 static void
@@ -846,7 +856,13 @@ generic_read(struct socket *socket, unsigned char *data, int len)
 
 	if (!rd) return SOCKET_CANT_READ;
 
-	return rd < 0 ? SOCKET_SYSCALL_ERROR : rd;
+	if (rd < 0) {
+#ifdef EWOULDBLOCK
+		if (errno == EWOULDBLOCK) return SOCKET_CANT_READ;
+#endif
+		return SOCKET_SYSCALL_ERROR;
+	}
+	return rd;
 }
 
 static void

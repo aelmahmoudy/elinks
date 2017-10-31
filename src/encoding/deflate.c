@@ -29,17 +29,9 @@ struct deflate_enc_data {
 	/* The file descriptor from which we read.  */
 	int fdread;
 
+	unsigned int last_read:1;
 	unsigned int after_first_read:1;
-
-	/** Error code to be returned by all later deflate_read()
-	 * calls.  ::READENC_EAGAIN is used here as a passive value
-	 * that means no such error occurred yet.  */
-	enum read_encoded_result sticky_result;
-
-	/** Error code to be set to @c errno by all later
-	 * deflate_read() calls.  This is interesting only when
-	 * #sticky_result == ::READENC_ERRNO.  */
-	int sticky_errno;
+	unsigned int after_end:1;
 
 	/* A buffer for data that has been read from the file but not
 	 * yet decompressed.  z_stream.next_in and z_stream.avail_in
@@ -68,11 +60,15 @@ deflate_open(int window_size, struct stream_encoded *stream, int fd)
 	 * will be initialized on demand by deflate_read.  */
 	copy_struct(&data->deflate_stream, &null_z_stream);
 	data->fdread = fd;
+	data->last_read = 0;
 	data->after_first_read = 0;
-	data->sticky_result = READENC_EAGAIN;
-	data->sticky_errno = 0;
+	data->after_end = 0;
 
-	err = inflateInit2(&data->deflate_stream, window_size);
+	if (window_size > 0) {
+		err = inflateInit2(&data->deflate_stream, window_size);
+	} else {
+		err = inflateInit(&data->deflate_stream);
+	}
 	if (err != Z_OK) {
 		mem_free(data);
 		return -1;
@@ -82,14 +78,12 @@ deflate_open(int window_size, struct stream_encoded *stream, int fd)
 	return 0;
 }
 
-#if 0
 static int
 deflate_raw_open(struct stream_encoded *stream, int fd)
 {
 	/* raw DEFLATE with neither zlib nor gzip header */
 	return deflate_open(-MAX_WBITS, stream, fd);
 }
-#endif
 
 static int
 deflate_gzip_open(struct stream_encoded *stream, int fd)
@@ -98,36 +92,6 @@ deflate_gzip_open(struct stream_encoded *stream, int fd)
 	return deflate_open(MAX_WBITS + 32, stream, fd);
 }
 
-static void
-deflate_set_sticky(struct deflate_enc_data *data, int ret, int save_errno)
-{
-	switch (ret) {
-	case Z_STREAM_END:
-		data->sticky_result = READENC_STREAM_END;
-		break;
-	case Z_DATA_ERROR:
-	case Z_NEED_DICT:
-		data->sticky_result = READENC_DATA_ERROR;
-		break;
-	case Z_ERRNO:
-		data->sticky_result = READENC_ERRNO;
-		data->sticky_errno = save_errno;
-		break;
-	case Z_MEM_ERROR:
-		data->sticky_result = READENC_MEM_ERROR;
-		break;
-	case Z_STREAM_ERROR:
-	case Z_BUF_ERROR:
-	case Z_VERSION_ERROR:
-	default:
-		data->sticky_result = READENC_INTERNAL;
-		break;
-	}
-}
-
-/*! @return A positive number means that many bytes were
- * written to the @a buf array.  Otherwise, the value is
- * enum read_encoded_result.  */
 static int
 deflate_read(struct stream_encoded *stream, unsigned char *buf, int len)
 {
@@ -135,16 +99,11 @@ deflate_read(struct stream_encoded *stream, unsigned char *buf, int len)
 	int err = 0;
 	int l = 0;
 
-	if (!data) return READENC_INTERNAL;
+	if (!data) return -1;
 
 	assert(len > 0);
-	if_assert_failed return READENC_INTERNAL;
 
-	if (data->sticky_result != READENC_EAGAIN) {
-		if (data->sticky_result == READENC_ERRNO)
-			errno = data->sticky_errno;
-		return data->sticky_result;
-	}
+	if (data->last_read) return 0;
 
 	data->deflate_stream.avail_out = len;
 	data->deflate_stream.next_out = buf;
@@ -152,16 +111,16 @@ deflate_read(struct stream_encoded *stream, unsigned char *buf, int len)
 	do {
 		if (data->deflate_stream.avail_in == 0) {
 			l = safe_read(data->fdread, data->buf,
-				      ELINKS_DEFLATE_BUFFER_LENGTH);
+			                  ELINKS_DEFLATE_BUFFER_LENGTH);
 
 			if (l == -1) {
 				if (errno == EAGAIN)
 					break;
 				else
-					return READENC_ERRNO; /* I/O error */
+					return -1; /* I/O error */
 			} else if (l == 0) {
 				/* EOF. It is error: we wait for more bytes */
-				return READENC_UNEXPECTED_EOF;
+				return -1;
 			}
 
 			data->deflate_stream.next_in = data->buf;
@@ -201,43 +160,37 @@ restart:
 			if (err == Z_OK) goto restart;
 		}
 		data->after_first_read = 1;
-		if (err != Z_OK) {
-			deflate_set_sticky(data, err, errno);
+		if (err == Z_STREAM_END) {
+			data->last_read = 1;
+			break;
+		} else if (err != Z_OK) {
+			data->last_read = 1;
 			break;
 		}
 	} while (data->deflate_stream.avail_out > 0);
 
-	l = len - data->deflate_stream.avail_out;
-	assert(l == data->deflate_stream.next_out - buf);
-	if (l > 0) /* Positive return values are byte counts */
-		return l;
-	else {	   /* and others are from enum read_encoded_result */
-		if (data->sticky_result == READENC_ERRNO)
-			errno = data->sticky_errno;
-		return data->sticky_result;
-	}
+	assert(len - data->deflate_stream.avail_out == data->deflate_stream.next_out - buf);
+	return len - data->deflate_stream.avail_out;
 }
 
 static unsigned char *
-deflate_decode_buffer(int window_size, unsigned char *data, int len, int *new_len)
+deflate_decode_buffer(struct stream_encoded *st, int window_size, unsigned char *data, int len, int *new_len)
 {
-	z_stream stream;
+	struct deflate_enc_data *enc_data = (struct deflate_enc_data *) st->data;
+	z_stream *stream = &enc_data->deflate_stream;
 	unsigned char *buffer = NULL;
 	int error;
 
 	*new_len = 0;	  /* default, left there if an error occurs */
 
 	if (!len) return NULL;
-	memset(&stream, 0, sizeof(z_stream));
-	stream.next_in = data;
-	stream.avail_in = len;
-
-	if (inflateInit2(&stream, window_size) != Z_OK)
-		return NULL;
+	stream->next_in = data;
+	stream->avail_in = len;
+	stream->total_out = 0;
 
 	do {
 		unsigned char *new_buffer;
-		size_t size = stream.total_out + MAX_STR_LEN;
+		size_t size = stream->total_out + MAX_STR_LEN;
 
 		new_buffer = mem_realloc(buffer, size);
 		if (!new_buffer) {
@@ -246,39 +199,52 @@ deflate_decode_buffer(int window_size, unsigned char *data, int len, int *new_le
 		}
 
 		buffer		 = new_buffer;
-		stream.next_out  = buffer + stream.total_out;
-		stream.avail_out = MAX_STR_LEN;
-
-		error = inflate(&stream, Z_SYNC_FLUSH);
+		stream->next_out  = buffer + stream->total_out;
+		stream->avail_out = MAX_STR_LEN;
+restart2:
+		error = inflate(stream, Z_SYNC_FLUSH);
 		if (error == Z_STREAM_END) {
-			error = Z_OK;
 			break;
 		}
-	} while (error == Z_OK && stream.avail_in > 0);
+		if (error == Z_DATA_ERROR && !enc_data->after_first_read) {
+			(void)inflateEnd(stream);
+			error = inflateInit2(stream, -MAX_WBITS);
+			if (error == Z_OK) {
+				enc_data->after_first_read = 1;
+				stream->next_in = data;
+				stream->avail_in = len;
+				goto restart2; 
+			}
+		}
+	} while (error == Z_OK && stream->avail_in > 0);
 
-	inflateEnd(&stream);
+	if (error == Z_STREAM_END) {
+		inflateEnd(stream);
+		enc_data->after_end = 1;
+		error = Z_OK;
+	}
 
 	if (error == Z_OK) {
-		*new_len = stream.total_out;
+		*new_len = stream->total_out;
 		return buffer;
 	} else {
-		if (buffer) mem_free(buffer);
+		mem_free_if(buffer);
 		return NULL;
 	}
 }
 
 static unsigned char *
-deflate_raw_decode_buffer(unsigned char *data, int len, int *new_len)
+deflate_raw_decode_buffer(struct stream_encoded *st, unsigned char *data, int len, int *new_len)
 {
 	/* raw DEFLATE with neither zlib nor gzip header */
-	return deflate_decode_buffer(-MAX_WBITS, data, len, new_len);
+	return deflate_decode_buffer(st, -MAX_WBITS, data, len, new_len);
 }
 
 static unsigned char *
-deflate_gzip_decode_buffer(unsigned char *data, int len, int *new_len)
+deflate_gzip_decode_buffer(struct stream_encoded *st, unsigned char *data, int len, int *new_len)
 {
 	/* detect gzip header, else assume zlib header */
-	return deflate_decode_buffer(MAX_WBITS + 32, data, len, new_len);
+	return deflate_decode_buffer(st, MAX_WBITS + 32, data, len, new_len);
 }
 
 static void
@@ -287,8 +253,12 @@ deflate_close(struct stream_encoded *stream)
 	struct deflate_enc_data *data = (struct deflate_enc_data *) stream->data;
 
 	if (data) {
-		inflateEnd(&data->deflate_stream);
-		close(data->fdread);
+		if (!data->after_end) {
+			inflateEnd(&data->deflate_stream);
+		}
+		if (data->fdread != -1) {
+			close(data->fdread);
+		}
 		mem_free(data);
 		stream->data = 0;
 	}
@@ -299,7 +269,7 @@ static const unsigned char *const deflate_extensions[] = { NULL };
 const struct decoding_backend deflate_decoding_backend = {
 	"deflate",
 	deflate_extensions,
-	deflate_gzip_open,
+	deflate_raw_open,
 	deflate_read,
 	deflate_raw_decode_buffer,
 	deflate_close,

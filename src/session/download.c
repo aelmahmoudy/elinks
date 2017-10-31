@@ -32,6 +32,7 @@
 #include "dialogs/menu.h"
 #include "intl/gettext/libintl.h"
 #include "main/object.h"
+#include "main/select.h"
 #include "mime/mime.h"
 #include "network/connection.h"
 #include "network/progress.h"
@@ -135,7 +136,6 @@ abort_download(struct file_download *file_download)
 	 * download dialog code potentially could access free()d memory. */
 	assert(!is_object_used(file_download));
 #endif
-
 	done_download_display(file_download);
 
 	if (file_download->ses)
@@ -153,7 +153,7 @@ abort_download(struct file_download *file_download)
 
 	mem_free_if(file_download->external_handler);
 	if (file_download->file) {
-		if (file_download->delete) unlink(file_download->file);
+		if (file_download->delete_) unlink(file_download->file);
 		mem_free(file_download->file);
 	}
 	del_from_list(file_download);
@@ -318,12 +318,91 @@ write_cache_entry_to_file(struct cache_entry *cached, struct file_download *file
 static void
 abort_download_and_beep(struct file_download *file_download, struct terminal *term)
 {
-	if (term && get_opt_int("document.download.notify_bell")
+	if (term && get_opt_int("document.download.notify_bell",
+	                        file_download->ses)
 		    + file_download->notify >= 2) {
 		beep_terminal(term);
 	}
 
 	abort_download(file_download);
+}
+
+struct exec_mailcap {
+	struct session *ses;
+	unsigned char *command;
+	unsigned char *file;
+};
+
+static void
+do_follow_url_mailcap(struct session *ses, struct uri *uri)
+{
+	if (!uri) {
+		print_error_dialog(ses, connection_state(S_BAD_URL), uri, PRI_CANCEL);
+		return;
+	}
+
+	ses->reloadlevel = CACHE_MODE_NORMAL;
+
+	if (ses->task.type == TASK_FORWARD) {
+		if (compare_uri(ses->loading_uri, uri, 0)) {
+			/* We're already loading the URL. */
+			return;
+		}
+	}
+
+	abort_loading(ses, 0);
+
+	ses_goto(ses, uri, NULL, NULL, CACHE_MODE_NORMAL, TASK_FORWARD, 0);
+}
+
+
+static void
+exec_mailcap_command(void *data)
+{
+	struct exec_mailcap *exec_mailcap = data;
+
+	if (exec_mailcap) {
+		if (exec_mailcap->command) {
+			struct string string;
+
+			if (init_string(&string)) {
+				struct uri *ref = get_uri("mailcap:elmailcap", 0);
+				struct uri *uri;
+				struct session *ses = exec_mailcap->ses;
+
+				add_to_string(&string, "mailcap:");
+				add_to_string(&string, exec_mailcap->command);
+				if (exec_mailcap->file) {
+					add_to_string(&string, " && /bin/rm -f ");
+					add_to_string(&string, exec_mailcap->file);
+				}
+
+				uri = get_uri(string.source, 0);
+				done_string(&string);
+				set_session_referrer(ses, ref);
+				if (ref) done_uri(ref);
+
+				do_follow_url_mailcap(ses, uri);
+				if (uri) done_uri(uri);
+			}
+			mem_free(exec_mailcap->command);
+		}
+		mem_free_if(exec_mailcap->file);
+		mem_free(exec_mailcap);
+	}
+}
+
+static void
+exec_later(struct session *ses, unsigned char *handler, unsigned char *file)
+{
+	struct exec_mailcap *exec_mailcap = mem_calloc(1, sizeof(*exec_mailcap));
+
+	if (exec_mailcap) {
+		exec_mailcap->ses = ses;
+		exec_mailcap->command = null_or_stracpy(handler);
+		exec_mailcap->file = null_or_stracpy(file);
+		register_bottom_half(exec_mailcap_command, exec_mailcap);
+	}
 }
 
 static void
@@ -334,47 +413,66 @@ download_data_store(struct download *download, struct file_download *file_downlo
 	assert_terminal_ptr_not_dangling(term);
 	if_assert_failed term = file_download->term = NULL;
 
-	if (!term) {
-		/* No term here, so no beep. --Zas */
-		abort_download(file_download);
-		return;
-	}
-
 	if (is_in_progress_state(download->state)) {
 		if (file_download->dlg_data)
 			redraw_dialog(file_download->dlg_data, 1);
 		return;
 	}
 
+	/* If the original terminal of the download has been closed,
+	 * display any messages in the default terminal instead.  */
+	if (term == NULL)
+		term = get_default_terminal(); /* may be NULL too */
+
 	if (!is_in_state(download->state, S_OK)) {
 		unsigned char *url = get_uri_string(file_download->uri, URI_PUBLIC);
 		struct connection_state state = download->state;
 
+		/* abort_download_and_beep allows term==NULL.  */
 		abort_download_and_beep(file_download, term);
 
 		if (!url) return;
 
-		info_box(term, MSGBOX_FREE_TEXT,
-			 N_("Download error"), ALIGN_CENTER,
-			 msg_text(term, N_("Error downloading %s:\n\n%s"),
-				  url, get_state_message(state, term)));
+		if (term) {
+			info_box(term, MSGBOX_FREE_TEXT,
+				 N_("Download error"), ALIGN_CENTER,
+				 msg_text(term, N_("Error downloading %s:\n\n%s"),
+					  url, get_state_message(state, term)));
+		}
 		mem_free(url);
 		return;
 	}
 
 	if (file_download->external_handler) {
+		if (term == NULL) {
+			/* There is no terminal in which to run the handler.
+			 * Abort the download.  file_download->delete_ should
+			 * be 1 here so that the following call also deletes
+			 * the temporary file.  */ 
+			abort_download(file_download);
+			return;
+		}
+
 		prealloc_truncate(file_download->handle, file_download->seek);
 		close(file_download->handle);
 		file_download->handle = -1;
-		exec_on_terminal(term, file_download->external_handler,
-				 file_download->file,
-				 file_download->block ? TERM_EXEC_FG : TERM_EXEC_BG);
-		file_download->delete = 0;
+		if (file_download->copiousoutput) {
+			exec_later(file_download->ses,
+				   file_download->external_handler, file_download->file);
+			/* Temporary file is deleted by the mailcap_protocol_handler */
+			file_download->delete_ = 0;
+		} else {
+			exec_on_terminal(term, file_download->external_handler,
+					 file_download->file,
+					 file_download->block ? TERM_EXEC_FG :
+					 TERM_EXEC_BG);
+		}
+		file_download->delete_ = 0;
 		abort_download_and_beep(file_download, term);
 		return;
 	}
 
-	if (file_download->notify) {
+	if (file_download->notify && term) {
 		unsigned char *url = get_uri_string(file_download->uri, URI_PUBLIC);
 
 		/* This is apparently a little racy. Deleting the box item will
@@ -393,13 +491,15 @@ download_data_store(struct download *download, struct file_download *file_downlo
 	}
 
 	if (file_download->remotetime
-	    && get_opt_bool("document.download.set_original_time")) {
+	    && get_opt_bool("document.download.set_original_time",
+	                    file_download->ses)) {
 		struct utimbuf foo;
 
 		foo.actime = foo.modtime = file_download->remotetime;
 		utime(file_download->file, &foo);
 	}
 
+	/* abort_download_and_beep allows term==NULL.  */
 	abort_download_and_beep(file_download, term);
 }
 
@@ -682,7 +782,7 @@ lookup_unique_name(struct terminal *term, unsigned char *ofile,
 
 	/* !overwrite means always silently overwrite, which may be admitelly
 	 * indeed a little confusing ;-) */
-	overwrite = get_opt_int("document.download.overwrite");
+	overwrite = get_opt_int("document.download.overwrite", NULL);
 	if (!overwrite) {
 		/* Nothing special to do... */
 		callback(term, ofile, data, flags);
@@ -807,7 +907,7 @@ create_download_file_do(struct terminal *term, unsigned char *file,
 		set_bin(h);
 
 		if (!(flags & DOWNLOAD_EXTERNAL)) {
-			unsigned char *download_dir = get_opt_str("document.download.directory");
+			unsigned char *download_dir = get_opt_str("document.download.directory", NULL);
 			int i;
 
 			safe_strncpy(download_dir, file, MAX_STR_LEN);
@@ -1143,7 +1243,8 @@ continue_download_do(struct terminal *term, int fd, void *data,
 	if (type_query->external_handler) {
 		file_download->external_handler = subst_file(type_query->external_handler,
 							     codw_hop->file);
-		file_download->delete = 1;
+		file_download->delete_ = 1;
+		file_download->copiousoutput = type_query->copiousoutput;
 		mem_free(codw_hop->file);
 		mem_free_set(&type_query->external_handler, NULL);
 	}
@@ -1212,6 +1313,19 @@ continue_download(void *data, unsigned char *file)
 }
 
 
+/*! @relates type_query */
+static struct type_query *
+find_type_query(struct session *ses)
+{
+	struct type_query *type_query;
+
+	foreach (type_query, ses->type_queries)
+		if (compare_uri(type_query->uri, ses->loading_uri, 0))
+			return type_query;
+
+	return NULL;
+}
+
 /** Prepare to ask the user what to do with a file, but don't display
  * the window yet.  To display it, do_type_query() must be called
  * separately.  setup_download_handler() takes care of that.
@@ -1222,11 +1336,6 @@ init_type_query(struct session *ses, struct download *download,
 	struct cache_entry *cached)
 {
 	struct type_query *type_query;
-
-	/* There can be only one ... */
-	foreach (type_query, ses->type_queries)
-		if (compare_uri(type_query->uri, ses->loading_uri, 0))
-			return NULL;
 
 	type_query = mem_calloc(1, sizeof(*type_query));
 	if (!type_query) return NULL;
@@ -1336,23 +1445,23 @@ tp_display(struct type_query *type_query)
 	struct view_state *vs;
 	struct session *ses = type_query->ses;
 	struct uri *loading_uri = ses->loading_uri;
-	unsigned char *target_frame = ses->task.target.frame;
+	unsigned char *target_frame = null_or_stracpy(ses->task.target.frame);
 
 	ses->loading_uri = type_query->uri;
-	ses->task.target.frame = type_query->target_frame;
+	mem_free_set(&ses->task.target.frame, null_or_stracpy(type_query->target_frame));
 	vs = ses_forward(ses, /* type_query->frame */ 0);
 	if (vs) vs->plain = 1;
 	ses->loading_uri = loading_uri;
-	ses->task.target.frame = target_frame;
+	mem_free_set(&ses->task.target.frame, target_frame);
 
 	if (/* !type_query->frame */ 1) {
 		struct download *old = &type_query->download;
-		struct download *new = &cur_loc(ses)->download;
+		struct download *new_ = &cur_loc(ses)->download;
 
-		new->callback = (download_callback_T *) doc_loading_callback;
-		new->data = ses;
+		new_->callback = (download_callback_T *) doc_loading_callback;
+		new_->data = ses;
 
-		move_download(old, new, PRI_MAIN);
+		move_download(old, new_, PRI_MAIN);
 	}
 
 	display_timer(ses);
@@ -1386,9 +1495,13 @@ tp_open(struct type_query *type_query)
 		}
 
 		if (handler) {
-			exec_on_terminal(type_query->ses->tab->term,
-					 handler, "",
-					 type_query->block ? TERM_EXEC_FG : TERM_EXEC_BG);
+			if (type_query->copiousoutput) {
+				exec_later(type_query->ses, handler, NULL);
+			} else {
+				exec_on_terminal(type_query->ses->tab->term,
+						 handler, "", type_query->block ?
+						 TERM_EXEC_FG : TERM_EXEC_BG);
+			}
 			mem_free(handler);
 		}
 
@@ -1427,6 +1540,7 @@ do_type_query(struct type_query *type_query, unsigned char *ct, struct mime_hand
 
 	if (handler) {
 		type_query->block = handler->block;
+		type_query->copiousoutput = handler->copiousoutput;
 		if (!handler->ask) {
 			type_query->external_handler = stracpy(handler->program);
 			tp_open(type_query);
@@ -1618,19 +1732,24 @@ setup_download_handler(struct session *ses, struct download *loading,
 	if (!handler && strlen(ctype) >= 4 && !c_strncasecmp(ctype, "text", 4))
 		goto plaintext_follow;
 
-	type_query = init_type_query(ses, loading, cached);
+	type_query = find_type_query(ses);
 	if (type_query) {
 		ret = 1;
+	} else {
+		type_query = init_type_query(ses, loading, cached);
+		if (type_query) {
+			ret = 1;
 #ifdef CONFIG_BITTORRENT
-		/* A terrible waste of a good MIME handler here, but we want
-		 * to use the type_query this is easier. */
-		if ((!c_strcasecmp(ctype, "application/x-bittorrent")
-			|| !c_strcasecmp(ctype, "application/x-torrent"))
-		    && !get_cmd_opt_bool("anonymous"))
-			query_bittorrent_dialog(type_query);
-		else
+			/* A terrible waste of a good MIME handler here, but we want
+			 * to use the type_query this is easier. */
+			if ((!c_strcasecmp(ctype, "application/x-bittorrent")
+				|| !c_strcasecmp(ctype, "application/x-torrent"))
+			    && !get_cmd_opt_bool("anonymous"))
+				query_bittorrent_dialog(type_query);
+			else
 #endif
-			do_type_query(type_query, ctype, handler);
+				do_type_query(type_query, ctype, handler);
+		}
 	}
 
 	mem_free_if(handler);

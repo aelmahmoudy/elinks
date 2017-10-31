@@ -4,6 +4,7 @@
 #include "intl/charsets.h" /* unicode_val_T */
 
 struct color_pair;
+struct dialog_data;
 struct box;
 struct terminal;
 
@@ -24,6 +25,7 @@ struct terminal;
  * XXX: The bold mask is used as part of the color encoding. */
 enum screen_char_attr {
 	SCREEN_ATTR_UNSEARCHABLE = 0x01,
+	SCREEN_ATTR_NODE_NUMBER = 0x02,
 	SCREEN_ATTR_BOLD	= 0x08,
 	SCREEN_ATTR_ITALIC	= 0x10,
 	SCREEN_ATTR_UNDERLINE	= 0x20,
@@ -50,8 +52,11 @@ struct screen_char {
 	/** Attributes are ::screen_char_attr bits. */
 	unsigned char attr;
 
-	/** The fore- and background color. */
-	unsigned char color[SCREEN_COLOR_SIZE];
+	union {
+		/** The fore- and background color. */
+		unsigned char color[SCREEN_COLOR_SIZE];
+		unsigned int node_number;
+	} c;
 };
 
 /** @relates screen_char */
@@ -255,6 +260,9 @@ void draw_char(struct terminal *term, int x, int y,
 	       struct color_pair *color);
 #endif /* CONFIG_UTF8 */
 
+void draw_space(struct terminal *term, int x, int y,
+		struct screen_char *color);
+
 /** Draws area defined by @a box using the same colors and attributes. */
 void draw_box(struct terminal *term, struct box *box,
 	      unsigned char data, enum screen_char_attr attr,
@@ -280,6 +288,12 @@ void draw_text(struct terminal *term, int x, int y,
 	       enum screen_char_attr attr,
 	       struct color_pair *color);
 
+/** Draws text for dialogs. */
+void draw_dlg_text(struct dialog_data *dlg_data, int x, int y,
+	  unsigned char *text, int length,
+	  enum screen_char_attr attr, struct color_pair *color);
+
+
 /** Draws @a length chars from @a line on the screen.  */
 void draw_line(struct terminal *term, int x, int y, int length,
 	       struct screen_char *line);
@@ -288,6 +302,9 @@ void draw_line(struct terminal *term, int x, int y, int length,
  * block_cursor terminal option decides whether the cursor should be put at the
  * bottom right corner of the screen. */
 void set_cursor(struct terminal *term, int x, int y, int blockable);
+
+/* set cursor for dialogs */
+void set_dlg_cursor(struct terminal *term, struct dialog_data *dlg_data, int x, int y, int blockable);
 
 /** Blanks the screen. */
 void clear_terminal(struct terminal *);

@@ -190,7 +190,7 @@ parse_psv_resp(unsigned char *data, int *n, int max_value)
  * number otherwise. */
 static int
 get_ftp_response(struct connection *conn, struct read_buffer *rb, int part,
-		 struct sockaddr_storage *sa)
+		 struct sockaddr_storage *sa, off_t *est_length)
 {
 	unsigned char *eol;
 	unsigned char *num_end;
@@ -257,6 +257,14 @@ again:
 		return 0;
 ok:
 		pos = i;
+	}
+
+	if (response == 213 && est_length) {
+		off_t size = strtoull(num_end + 1, NULL, 10);
+		if (errno) {
+			return -1;
+		}
+		*est_length = size;
 	}
 
 	if (part != 2)
@@ -365,7 +373,7 @@ static void
 ftp_got_info(struct socket *socket, struct read_buffer *rb)
 {
 	struct connection *conn = socket->conn;
-	int response = get_ftp_response(conn, rb, 0, NULL);
+	int response = get_ftp_response(conn, rb, 0, NULL, NULL);
 
 	if (response == -1) {
 		abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -397,7 +405,7 @@ static void
 ftp_got_user_info(struct socket *socket, struct read_buffer *rb)
 {
 	struct connection *conn = socket->conn;
-	int response = get_ftp_response(conn, rb, 0, NULL);
+	int response = get_ftp_response(conn, rb, 0, NULL, NULL);
 
 	if (response == -1) {
 		abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -470,7 +478,8 @@ ftp_pass(struct connection *conn)
 		add_to_string(&cmd, auth->password);
 
 	} else {
-		add_to_string(&cmd, get_opt_str("protocol.ftp.anon_passwd"));
+		add_to_string(&cmd, get_opt_str("protocol.ftp.anon_passwd",
+		                                NULL));
 	}
 	add_crlf_to_string(&cmd);
 
@@ -482,7 +491,7 @@ static void
 ftp_pass_info(struct socket *socket, struct read_buffer *rb)
 {
 	struct connection *conn = socket->conn;
-	int response = get_ftp_response(conn, rb, 0, NULL);
+	int response = get_ftp_response(conn, rb, 0, NULL, NULL);
 
 	if (response == -1) {
 		abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -593,10 +602,10 @@ get_ftp_data_socket(struct connection *conn, struct string *command)
 {
 	struct ftp_connection_info *ftp = conn->info;
 
-	ftp->use_pasv = get_opt_bool("protocol.ftp.use_pasv");
+	ftp->use_pasv = get_opt_bool("protocol.ftp.use_pasv", NULL);
 
 #ifdef CONFIG_IPV6
-	ftp->use_epsv = get_opt_bool("protocol.ftp.use_epsv");
+	ftp->use_epsv = get_opt_bool("protocol.ftp.use_epsv", NULL);
 
 	if (conn->socket->protocol_family == EL_PF_INET6) {
 		if (ftp->use_epsv) {
@@ -682,6 +691,13 @@ add_file_cmd_to_str(struct connection *conn)
 		goto ret;
 	}
 
+	assert(conn->info == NULL);
+	assert(conn->done == NULL);
+	if_assert_failed {
+		abort_connection(conn, connection_state(S_INTERNAL));
+		goto ret;
+	}
+
 	/* This will be reallocated below when we know how long the
 	 * command string should be.  Error handling could be
 	 * simplified a little by allocating this initial structure on
@@ -693,6 +709,7 @@ add_file_cmd_to_str(struct connection *conn)
 		goto ret;
 	}
 
+	/* conn->info and conn->done were asserted as NULL above.  */
 	conn->info = ftp;	/* Freed when connection is destroyed. */
 
 	if (!init_string(&command)
@@ -747,7 +764,7 @@ add_file_cmd_to_str(struct connection *conn)
 		/* Commands to get a file. */
 
 		ftp->dir = 0;
-		ftp->pending_commands = 3;
+		ftp->pending_commands = 4;
 
 		if (!add_to_string(&command, "TYPE I") /* BINARY */
 		    || !add_crlf_to_string(&command)
@@ -771,6 +788,13 @@ add_file_cmd_to_str(struct connection *conn)
 
 			ftp->rest_sent = 1;
 			ftp->pending_commands++;
+		}
+
+		if (!add_to_string(&command, "SIZE ")
+		    || !add_string_to_string(&command, &pathname)
+		    || !add_crlf_to_string(&command)) {
+			abort_connection(conn, connection_state(S_OUT_OF_MEM));
+			goto ret;
 		}
 
 		if (!add_to_string(&command, "RETR ")
@@ -807,7 +831,7 @@ static void
 send_it_line_by_line(struct connection *conn, struct string *cmd)
 {
 	struct ftp_connection_info *ftp = conn->info;
-	unsigned char *nl = strchr(ftp->cmd_buffer, '\n');
+	unsigned char *nl = strchr((const char *)ftp->cmd_buffer, '\n');
 
 	if (!nl) {
 		add_to_string(cmd, ftp->cmd_buffer);
@@ -868,7 +892,7 @@ get_filesize_from_RETR(unsigned char *data, int data_len, int *resume)
 		double size;
 
 		data[data_len - 1] = '\0';
-		kbytes = strstr(data, "kbytes");
+		kbytes = strstr((const char *)data, "kbytes");
 		data[data_len - 1] = tmp;
 		if (!kbytes) return -1;
 
@@ -905,7 +929,7 @@ next:
 		return -1;
 
 	errno = 0;
-	file_len = (off_t) strtol(&data[pos_file_len], NULL, 10);
+	file_len = (off_t) strtoll(&data[pos_file_len], NULL, 10);
 	if (errno) return -1;
 
 	return file_len;
@@ -945,11 +969,12 @@ ftp_retr_file(struct socket *socket, struct read_buffer *rb)
 	struct connection *conn = socket->conn;
 	struct ftp_connection_info *ftp = conn->info;
 	int response;
+	off_t size = -1;
 
 	if (ftp->pending_commands > 1) {
 		struct sockaddr_storage sa;
 
-		response = get_ftp_response(conn, rb, 0, &sa);
+		response = get_ftp_response(conn, rb, 0, &sa, &size);
 
 		if (response == -1) {
 			abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -991,7 +1016,10 @@ ftp_retr_file(struct socket *socket, struct read_buffer *rb)
 				break;
 
 			case 3:	/* REST / CWD */
-				if (response >= 400) {
+			case 4: /* SIZE */
+				if (response == 213 && size != -1 && conn->est_length == -1) {
+					conn->est_length = size;
+				} else if (response >= 400) {
 					if (ftp->dir) {
 						abort_connection(conn,
 								 connection_state(S_FTP_NO_FILE));
@@ -1022,7 +1050,7 @@ ftp_retr_file(struct socket *socket, struct read_buffer *rb)
 		return;
 	}
 
-	response = get_ftp_response(conn, rb, 2, NULL);
+	response = get_ftp_response(conn, rb, 2, NULL, NULL);
 
 	if (response == -1) {
 		abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -1081,7 +1109,7 @@ ftp_got_final_response(struct socket *socket, struct read_buffer *rb)
 {
 	struct connection *conn = socket->conn;
 	struct ftp_connection_info *ftp = conn->info;
-	int response = get_ftp_response(conn, rb, 0, NULL);
+	int response = get_ftp_response(conn, rb, 0, NULL, NULL);
 
 	if (response == -1) {
 		abort_connection(conn, connection_state(S_FTP_ERROR));
@@ -1464,10 +1492,10 @@ out_of_mem:
 	if (ftp->dir) {
 		format.libc_codepage = get_cp_index("System");
 
-		format.colorize_dir = get_opt_bool("document.browse.links.color_dirs");
+		format.colorize_dir = get_opt_bool("document.browse.links.color_dirs", NULL);
 
 		if (format.colorize_dir) {
-			color_to_string(get_opt_color("document.colors.dirs"),
+			color_to_string(get_opt_color("document.colors.dirs", NULL),
 					format.dircolor);
 		}
 	}

@@ -9,6 +9,8 @@ smaller fixes and enhancements.
 
 General goals:
 
+ - Rewrite HTML parser (see the SGML+DOM stuff: src/dom/ & src/document/dom)
+
  - Write more documentation; docs, a lot of docs!
 
  - General code cleanup

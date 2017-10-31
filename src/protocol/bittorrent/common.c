@@ -17,6 +17,7 @@
 #include "util/error.h"
 #include "util/lists.h"
 #include "util/memory.h"
+#include "util/random.h"
 #include "util/sha1.h"
 #include "util/string.h"
 #include "util/snprintf.h"
@@ -167,13 +168,10 @@ init_bittorrent_peer_id(bittorrent_id_T peer_id)
 	}
 
 	/* Hmm, sizeof(peer_id) don't work here. */
+	random_nonce(peer_id + i, sizeof(bittorrent_id_T) - i);
 	while (i < sizeof(bittorrent_id_T)) {
-		int random = rand();
-
-		while (i < sizeof(bittorrent_id_T) && (random & 0xF)) {
-			peer_id[i++] = hx(random & 0xF);
-			random >>= 4;
-		}
+		peer_id[i] = hx(peer_id[i] & 0xF);
+		i++;
 	}
 }
 
@@ -318,7 +316,7 @@ struct bittorrent_fetcher {
 	bittorrent_fetch_callback_T callback;
 	void *data;
 	int redirects;
-	unsigned int delete:1;
+	unsigned int delete_:1;
 	struct download download;
 };
 
@@ -331,7 +329,7 @@ bittorrent_fetch_callback(struct download *download, void *data)
 {
 	struct bittorrent_fetcher *fetcher = data;
 	struct fragment *fragment;
-	struct string response;
+	struct bittorrent_const_string response;
 	struct cache_entry *cached = download->cached;
 
 	/* If the callback was removed we should shutdown ASAP. */
@@ -386,7 +384,7 @@ bittorrent_fetch_callback(struct download *download, void *data)
 
 	fetcher->callback(fetcher->data, connection_state(S_OK), &response);
 
-	if (fetcher->delete)
+	if (fetcher->delete_)
 		delete_cache_entry(cached);
 	if (fetcher->ref)
 		*fetcher->ref = NULL;
@@ -396,7 +394,7 @@ bittorrent_fetch_callback(struct download *download, void *data)
 struct bittorrent_fetcher *
 init_bittorrent_fetch(struct bittorrent_fetcher **fetcher_ref,
 		      struct uri *uri, bittorrent_fetch_callback_T callback,
-		      void *data, int delete)
+		      void *data, int delete_)
 {
 	struct bittorrent_fetcher *fetcher;
 
@@ -412,7 +410,7 @@ init_bittorrent_fetch(struct bittorrent_fetcher **fetcher_ref,
 	fetcher->ref		   = fetcher_ref;
 	fetcher->callback	   = callback;
 	fetcher->data		   = data;
-	fetcher->delete		   = delete;
+	fetcher->delete_	   = delete_;
 	fetcher->download.callback = bittorrent_fetch_callback;
 	fetcher->download.data     = fetcher;
 

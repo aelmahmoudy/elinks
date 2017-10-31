@@ -4,9 +4,20 @@
 #include "config.h"
 #endif
 
+/* Our current implementation of combining characters requires
+ * wcwidth().  Therefore the configure script should have disabled
+ * CONFIG_COMBINE if wcwidth() doesn't exist.  */
+#ifdef CONFIG_COMBINE
+#define _XOPEN_SOURCE 500	/* for wcwidth */
+#endif
+
 #include <ctype.h>
 #include <stdarg.h>
 #include <string.h>
+
+#ifdef HAVE_WCHAR_H
+#include <wchar.h>
+#endif
 
 #include "elinks.h"
 
@@ -163,7 +174,7 @@ realloc_line(struct html_context *html_context, struct document *document,
 	end = &line->chars[length];
 	end->data = ' ';
 	end->attr = 0;
-	set_screen_char_color(end, par_format.bgcolor, 0x0,
+	set_screen_char_color(end, par_format.color.background, 0x0,
 			      COLOR_ENSURE_CONTRAST, /* for bug 461 */
 			      document->options.color_mode);
 
@@ -188,7 +199,7 @@ expand_lines(struct html_context *html_context, struct part *part,
 	if (!use_document_bg_colors(&part->document->options))
 		return;
 
-	par_format.bgcolor = bgcolor;
+	par_format.color.background = bgcolor;
 
 	for (line = 0; line < lines; line++)
 		realloc_line(html_context, part->document, Y(y + line), X(x));
@@ -221,9 +232,13 @@ realloc_spaces(struct part *part, int length)
 /* When we clear chars we want to preserve and use the background colors
  * already in place else we could end up ``staining'' the background especial
  * when drawing table cells. So make the cleared chars share the colors in
- * place. */
+ * place.
+ *
+ * This function does not update document.comb_x and document.comb_y.
+ * That is the caller's responsibility.  */
 static inline void
-clear_hchars(struct html_context *html_context, int x, int y, int width)
+clear_hchars(struct html_context *html_context, int x, int y, int width,
+	     struct screen_char *a)
 {
 	struct part *part;
 	struct screen_char *pos, *end;
@@ -246,9 +261,7 @@ clear_hchars(struct html_context *html_context, int x, int y, int width)
 	end = pos + width - 1;
 	end->data = ' ';
 	end->attr = 0;
-	set_screen_char_color(end, par_format.bgcolor, 0x0,
-			      COLOR_ENSURE_CONTRAST, /* for bug 461 */
-			      part->document->options.color_mode);
+	end->c = a->c;
 
 	while (pos < end)
 		copy_screen_chars(pos++, end, 1);
@@ -262,7 +275,7 @@ get_frame_char(struct html_context *html_context, struct part *part,
 	       int x, int y, unsigned char data,
                color_T bgcolor, color_T fgcolor)
 {
-	struct screen_char *template;
+	struct screen_char *template_;
 
 	assert(html_context);
 	if_assert_failed return NULL;
@@ -276,14 +289,14 @@ get_frame_char(struct html_context *html_context, struct part *part,
 	assert(part->document->data);
 	if_assert_failed return NULL;
 
-	template = &POS(x, y);
-	template->data = data;
-	template->attr = SCREEN_ATTR_FRAME;
-	set_screen_char_color(template, bgcolor, fgcolor,
+	template_ = &POS(x, y);
+	template_->data = data;
+	template_->attr = SCREEN_ATTR_FRAME;
+	set_screen_char_color(template_, bgcolor, fgcolor,
 			      part->document->options.color_flags,
 			      part->document->options.color_mode);
 
-	return template;
+	return template_;
 }
 
 void
@@ -291,17 +304,17 @@ draw_frame_hchars(struct part *part, int x, int y, int width,
 		  unsigned char data, color_T bgcolor, color_T fgcolor,
 		  struct html_context *html_context)
 {
-	struct screen_char *template;
+	struct screen_char *template_;
 
 	assert(width > 0);
 	if_assert_failed return;
 
-	template = get_frame_char(html_context, part, x + width - 1, y, data, bgcolor, fgcolor);
-	if (!template) return;
+	template_ = get_frame_char(html_context, part, x + width - 1, y, data, bgcolor, fgcolor);
+	if (!template_) return;
 
 	/* The template char is the last we need to draw so only decrease @width. */
 	for (width -= 1; width; width--, x++) {
-		copy_screen_chars(&POS(x, y), template, 1);
+		copy_screen_chars(&POS(x, y), template_, 1);
 	}
 }
 
@@ -310,10 +323,10 @@ draw_frame_vchars(struct part *part, int x, int y, int height,
 		  unsigned char data, color_T bgcolor, color_T fgcolor,
 		  struct html_context *html_context)
 {
-	struct screen_char *template = get_frame_char(html_context, part, x, y,
+	struct screen_char *template_ = get_frame_char(html_context, part, x, y,
 	                                              data, bgcolor, fgcolor);
 
-	if (!template) return;
+	if (!template_) return;
 
 	/* The template char is the first vertical char to be drawn. So
 	 * copy it to the rest. */
@@ -321,7 +334,7 @@ draw_frame_vchars(struct part *part, int x, int y, int height,
 	    	if (realloc_line(html_context, part->document, Y(y), X(x)) < 0)
 			return;
 
-		copy_screen_chars(&POS(x, y), template, 1);
+		copy_screen_chars(&POS(x, y), template_, 1);
 	}
 }
 
@@ -329,7 +342,7 @@ static inline struct screen_char *
 get_format_screen_char(struct html_context *html_context,
                        enum link_state link_state)
 {
-	static struct text_style ta_cache = { -1, 0x0, 0x0 };
+	static struct text_style ta_cache = INIT_TEXT_STYLE(-1, 0x0, 0x0);
 	static struct screen_char schar_cache;
 
 	if (memcmp(&ta_cache, &format.style, sizeof(ta_cache))) {
@@ -351,6 +364,110 @@ get_format_screen_char(struct html_context *html_context,
 
 	return &schar_cache;
 }
+
+/* document.comb_x and document.comb_y exist only when CONFIG_COMBINE
+ * is defined.  assert() does nothing if CONFIG_FASTMEM is defined.  */
+#if defined(CONFIG_COMBINE) && !defined(CONFIG_FASTMEM)
+/** Assert that path->document->comb_x and part->document->comb_y
+ * refer to an allocated struct screen_char, or comb_x is -1.
+ *
+ * The CONFIG_COMBINE variant of set_hline() can update the
+ * screen_char.data at these coordinates.  Sometimes, the coordinates
+ * have not been valid, and the update has corrupted memory.  These
+ * assertions should catch that bug if it happens again.
+ *
+ * @post This function can leave ::assert_failed set, so the caller
+ * should use ::if_assert_failed, perhaps with discard_comb_x_y().  */
+static void
+assert_comb_x_y_ok(const struct document *document)
+{
+	assert(document);
+	if (document->comb_x != -1) {
+		assert(document->comb_y >= 0);
+		assert(document->comb_y < document->height);
+		assert(document->comb_x >= 0);
+		assert(document->comb_x < document->data[document->comb_y].length);
+	}
+}
+#else
+# define assert_comb_x_y_ok(document) ((void) 0)
+#endif
+
+#ifdef CONFIG_COMBINE
+/** Discard any combining characters that have not yet been combined
+ * with to the previous base character.  */
+static void
+discard_comb_x_y(struct document *document)
+{
+	document->comb_x = -1;
+	document->comb_y = -1;
+	document->combi_length = 0;
+}
+#else
+# define discard_comb_x_y(document) ((void) 0)
+#endif
+
+#ifdef CONFIG_COMBINE
+static void
+move_comb_x_y(struct part *part, int xf, int yf, int xt, int yt)
+{
+	if (part->document->comb_x != -1
+	    && part->document->comb_y == Y(yf)
+	    && part->document->comb_x >= X(xf)) {
+		if (yt >= 0) {
+			part->document->comb_x += xt - xf;
+			part->document->comb_y += yt - yf;
+		} else
+			discard_comb_x_y(part->document);
+	}
+}
+#else
+# define move_comb_x_y(part, xf, yf, xt, yt) ((void) 0)
+#endif
+
+#ifdef CONFIG_COMBINE
+static void
+set_comb_x_y(struct part *part, int x, int y)
+{
+	struct document *document = part->document;
+
+	document->comb_x = X(x);
+	document->comb_y = Y(y);
+	assert_comb_x_y_ok(document);
+	if_assert_failed discard_comb_x_y(document);
+}
+#else
+# define set_comb_x_y(part, x, y) ((void) 0)
+#endif
+
+#ifdef CONFIG_COMBINE
+static void
+put_combined(struct part *part, int x)
+{
+	struct document *document = part->document;
+
+	if (document->combi_length) {
+		if (document->comb_x != -1) {
+			unicode_val_T prev = get_combined(document->combi, document->combi_length + 1);
+
+			assert_comb_x_y_ok(document);
+			if_assert_failed prev = UCS_NO_CHAR;
+
+			/* Make sure the combined character is not considered as
+			 * a space. */
+			if (x)
+				part->spaces[x - 1] = 0;
+
+			if (prev != UCS_NO_CHAR)
+				document->data[document->comb_y]
+					.chars[document->comb_x].data = prev;
+		}
+		document->combi_length = 0;
+	}
+}
+#else
+# define put_combined(part, x) ((void) 0)
+#endif
 
 #ifdef CONFIG_UTF8
 /* First possibly do the format change and then find out what coordinates
@@ -393,6 +510,11 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
 	 * has mapped those characters to NBSP_CHAR.  */
 
 	if (part->document) {
+		struct document *const document = part->document;
+
+		assert_comb_x_y_ok(document);
+		if_assert_failed discard_comb_x_y(document);
+
 		/* Reallocate LINE(y).chars[] to large enough.  The
 		 * last parameter of realloc_line is the index of the
 		 * last element to which we may want to write,
@@ -402,10 +524,10 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
 		 * (All double-cell characters take up at least two
 		 * bytes in UTF-8, and there are no triple-cell or
 		 * wider characters.)  However, if there already is an
-		 * incomplete character in part->document->buf, then
+		 * incomplete character in document->buf, then
 		 * the first byte of input can result in a double-cell
 		 * character, so we must reserve one extra element.  */
-		orig_length = realloc_line(html_context, part->document,
+		orig_length = realloc_line(html_context, document,
 					   Y(y), X(x) + charslen);
 		if (orig_length < 0) /* error */
 			return 0;
@@ -413,17 +535,17 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
 			unsigned char *const end = chars + charslen;
 			unicode_val_T data;
 
-			if (part->document->buf_length) {
+			if (document->buf_length) {
 				/* previous char was broken in the middle */
-				int length = utf8charlen(part->document->buf);
+				int length = utf8charlen(document->buf);
 				unsigned char i;
-				unsigned char *buf_ptr = part->document->buf;
+				unsigned char *buf_ptr = document->buf;
 
-				for (i = part->document->buf_length; i < length && chars < end;) {
-					part->document->buf[i++] = *chars++;
+				for (i = document->buf_length; i < length && chars < end;) {
+					document->buf[i++] = *chars++;
 				}
-				part->document->buf_length = i;
-				part->document->buf[i] = '\0';
+				document->buf_length = i;
+				document->buf[i] = '\0';
 				data = utf8_to_unicode(&buf_ptr, buf_ptr + i);
 				if (data != UCS_NO_CHAR) {
 					/* FIXME: If there was invalid
@@ -436,11 +558,14 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
 					 * trivial to implement because
 					 * each byte may have arrived in
 					 * a separate call.  */
-					part->document->buf_length = 0;
+					document->buf_length = 0;
 					goto good_char;
 				} else {
 					/* Still not full char */
+					assert_comb_x_y_ok(document);
 					LINE(y).length = orig_length;
+					assert_comb_x_y_ok(document);
+					if_assert_failed discard_comb_x_y(document);
 					return 0;
 				}
 			}
@@ -465,9 +590,9 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
 						unsigned char i;
 
 						for (i = 0; chars < end;i++) {
-							part->document->buf[i] = *chars++;
+							document->buf[i] = *chars++;
 						}
-						part->document->buf_length = i;
+						document->buf_length = i;
 						break;
 					}
 					/* not reached */
@@ -480,9 +605,44 @@ good_char:
 				if (data == UCS_NO_BREAK_SPACE
 				    && html_context->options->wrap_nbsp)
 					data = UCS_SPACE;
+
+#ifdef CONFIG_COMBINE
+				if (wcwidth((wchar_t)data)) {
+					put_combined(part, x);
+					document->combi[0] = data;
+				} else {
+					if (part->cx == x) {
+						if (X(x)) {
+							/* Isolated combining 
+							 * character not on the 
+							 * first column: combine 
+							 * it with whatever is 
+							 * printed at its left. */
+							document->combi[0] = POS(x - 1, y).data;
+							set_comb_x_y(part, x - 1, y);
+						} else {
+							/* Isolated combining 
+							 * character on the
+							 * first column: use
+							 * UCS_NO_BREAK_SPACE as
+							 * the base character.
+							 * */
+							document->combi[0] = UCS_NO_BREAK_SPACE;
+							set_comb_x_y(part, x, y);
+							schar->data = UCS_SPACE;
+							copy_screen_chars(&POS(x++, y), schar, 1);
+						}
+					}
+					if (document->combi_length < (UCS_MAX_LENGTH_COMBINED - 1))
+						document->combi[++document->combi_length] = data;
+					continue;
+				}
+#endif /* CONFIG_COMBINE */
 				part->spaces[x] = (data == UCS_SPACE);
 
-				if (unicode_to_cell(data) == 2) {
+				if (unicode_to_cell(data) == 0)
+					continue;
+				else if (unicode_to_cell(data) == 2) {
 					schar->data = (unicode_val_T)data;
 					part->char_width[x] = 2;
 					copy_screen_chars(&POS(x++, y), schar, 1);
@@ -493,8 +653,14 @@ good_char:
 					part->char_width[x] = unicode_to_cell(data);
 					schar->data = (unicode_val_T)data;
 				}
+
+				set_comb_x_y(part, x, y);
+
 				copy_screen_chars(&POS(x++, y), schar, 1);
 			} /* while chars < end */
+
+			/* Display any trailing combining characters. */
+			put_combined(part, x);
 		} else { /* not UTF-8 */
 			for (; charslen > 0; charslen--, x++, chars++) {
 				part->char_width[x] = 1;
@@ -522,7 +688,10 @@ good_char:
 		 * which is the number of bytes, not the number of cells.
 		 * Change the length to the correct size, but don't let it
 		 * get smaller than it was on entry to this function.  */
+		assert_comb_x_y_ok(document);
 		LINE(y).length = int_max(orig_length, X(x));
+		assert_comb_x_y_ok(document);
+		if_assert_failed discard_comb_x_y(document);
 		len = x - x2;
 	} else { /* part->document == NULL */
 		if (utf8) {
@@ -532,7 +701,12 @@ good_char:
 				unicode_val_T data;
 
 				data = utf8_to_unicode(&chars, end);
+#ifdef CONFIG_COMBINE
+				if (data == UCS_SOFT_HYPHEN
+				    || (data != UCS_NO_CHAR && wcwidth((wchar_t)data) == 0))
+#else
 				if (data == UCS_SOFT_HYPHEN)
+#endif
 					continue;
 
 				if (data == UCS_NO_BREAK_SPACE
@@ -728,6 +902,8 @@ move_links(struct html_context *html_context, int xf, int yf, int xt, int yt)
 	}
 }
 
+/* This function does not update document.comb_x and document.comb_y.
+ * That is the caller's responsibility.  */
 static inline void
 copy_chars(struct html_context *html_context, int x, int y, int width, struct screen_char *d)
 {
@@ -763,10 +939,16 @@ move_chars(struct html_context *html_context, int x, int y, int nx, int ny)
 	if (LEN(y) - x <= 0) return;
 	copy_chars(html_context, nx, ny, LEN(y) - x, &POS(x, y));
 
+	assert_comb_x_y_ok(part->document);
+	move_comb_x_y(part, x, y, nx, ny);
 	LINE(y).length = X(x);
+	assert_comb_x_y_ok(part->document);
+	if_assert_failed discard_comb_x_y(part->document);
 	move_links(html_context, x, y, nx, ny);
 }
 
+/** Shift the line @a y to the right by @a shift character cells,
+ * and update document.comb_x and document.comb_y.  */
 static inline void
 shift_chars(struct html_context *html_context, int y, int shift)
 {
@@ -789,11 +971,18 @@ shift_chars(struct html_context *html_context, int y, int shift)
 
 	copy_screen_chars(a, &POS(0, y), len);
 
-	clear_hchars(html_context, 0, y, shift);
+	assert_comb_x_y_ok(part->document);
+	if_assert_failed discard_comb_x_y(part->document);
+
+	clear_hchars(html_context, 0, y, shift, a);
 	copy_chars(html_context, shift, y, len, a);
 	fmem_free(a);
 
 	move_links(html_context, 0, y, shift, y);
+	move_comb_x_y(part, 0, y, shift, y);
+
+	assert_comb_x_y_ok(part->document);
+	if_assert_failed discard_comb_x_y(part->document);
 }
 
 static inline void
@@ -809,8 +998,15 @@ del_chars(struct html_context *html_context, int x, int y)
 	assert(part && part->document && part->document->data);
 	if_assert_failed return;
 
+	assert_comb_x_y_ok(part->document);
+	if_assert_failed discard_comb_x_y(part->document);
+
 	LINE(y).length = X(x);
+	move_comb_x_y(part, x, y, -1, -1);
 	move_links(html_context, x, y, -1, -1);
+
+	assert_comb_x_y_ok(part->document);
+	if_assert_failed discard_comb_x_y(part->document);
 }
 
 #if TABLE_LINE_PADDING < 0
@@ -1136,6 +1332,7 @@ justify_line(struct html_context *html_context, int y)
 			 * link.  */
 			new_spaces = new_start - prev_end - 1;
 			if (word && new_spaces) {
+				move_comb_x_y(part, prev_end + 1, y, new_start, y);
 				move_links(html_context, prev_end + 1, y, new_start, y);
 				insert_spaces_in_link(part,
 						      new_start, y, new_spaces);
@@ -1304,9 +1501,10 @@ new_link(struct html_context *html_context, unsigned char *name, int namelen)
 		link->target = null_or_stracpy(form ? form->target : NULL);
 	}
 
-	link->color.background = format.style.bg;
+	link->color.background = format.style.color.background;
 	link->color.foreground = link_is_textinput(link)
-				? format.style.fg : format.clink;
+				? format.style.color.foreground
+				: format.color.clink;
 
 	init_link_event_hooks(html_context, link);
 
@@ -1362,9 +1560,52 @@ put_chars_conv(struct html_context *html_context,
 		       NULL, (void (*)(void *, unsigned char *, int)) put_chars, html_context);
 }
 
+/*
+ * Converts a number in base 10 to a string in another base whose symbols are
+ * represented by key. I the trivial case, key="0123456789". A more homerow
+ * friendly key="gfdsahjkl;trewqyuiopvcxznm". Returns the length of link_sym.
+ */
+int
+dec2qwerty(int num, unsigned char *link_sym, const unsigned char *key, int base)
+{
+	int newlen, i, pow;
+
+	if (base < 2) return 0;
+
+	for (newlen = 1, pow = base; pow <= num; ++newlen, pow *= base);
+
+	link_sym[newlen] = '\0';
+	for (i = 1; i <= newlen; ++i) {
+		int key_index = num % base;
+		link_sym[newlen - i] = key[key_index];
+		num /= base;
+	}
+	return newlen;
+}
+
+/*
+ * Returns the value of link_sym in decimal according to key.
+ */
+int
+qwerty2dec(const unsigned char *link_sym, const unsigned char *key, int base)
+{
+	int z = 0;
+	int symlen = strlen(link_sym);
+	int i;
+	int pow;
+
+	for (i = 0, pow = 1; i < symlen; ++i, pow *= base) {
+		int j = 0;
+		while (key[j] != link_sym[symlen - 1 - i]) ++j;
+		z += j * pow;
+	}
+	return z;
+}
+
 static inline void
 put_link_number(struct html_context *html_context)
 {
+	char *symkey = get_opt_str("document.browse.links.label_key", NULL);
 	struct part *part = html_context->part;
 	unsigned char s[64];
 	unsigned char *fl = format.link;
@@ -1372,12 +1613,13 @@ put_link_number(struct html_context *html_context)
 	unsigned char *fi = format.image;
 	struct form_control *ff = format.form;
 	int slen = 0;
+	int base = strlen(symkey);
 
 	format.link = format.target = format.image = NULL;
 	format.form = NULL;
 
 	s[slen++] = '[';
-	ulongcat(s, &slen, part->link_num, sizeof(s) - 3, 0);
+	slen += dec2qwerty(part->link_num, s + 1, symkey, base);
 	s[slen++] = ']';
 	s[slen] = '\0';
 
@@ -1943,7 +2185,7 @@ static inline void
 color_link_lines(struct html_context *html_context)
 {
 	struct document *document = html_context->part->document;
-	struct color_pair colors = INIT_COLOR_PAIR(par_format.bgcolor, 0x0);
+	struct color_pair colors = INIT_COLOR_PAIR(par_format.color.background, 0x0);
 	enum color_mode color_mode = document->options.color_mode;
 	enum color_flags color_flags = document->options.color_flags;
 	int y;
@@ -1959,7 +2201,7 @@ color_link_lines(struct html_context *html_context)
 			/* XXX: Entering hack zone! Change to clink color after
 			 * link text has been recolored. */
 			if (schar->data == ':' && colors.foreground == 0x0)
-				colors.foreground = format.clink;
+				colors.foreground = format.color.clink;
 		}
 
 		colors.foreground = 0x0;
@@ -2342,7 +2584,7 @@ render_html_document(struct cache_entry *cached, struct document *document,
 				 >= document->options.width));
 #endif
 
-	document->bgcolor = par_format.bgcolor;
+	document->color.background = par_format.color.background;
 
 	done_html_parser(html_context);
 

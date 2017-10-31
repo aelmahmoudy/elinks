@@ -47,7 +47,7 @@ read_bookmarks_default(FILE *f)
 
 		/* Load URL. */
 
-		url = strchr(in_buffer, '\t');
+		url = strchr((const char *)in_buffer, '\t');
 
 		/* If separator is not found, or title is empty or too long,
 		 * skip that line. */
@@ -59,7 +59,7 @@ read_bookmarks_default(FILE *f)
 
 		/* Load depth. */
 
-		depth_str = strchr(url, '\t');
+		depth_str = strchr((const char *)url, '\t');
 		if (depth_str && depth_str - url > MAX_STR_LEN - 1)
 			continue;
 
@@ -71,7 +71,7 @@ read_bookmarks_default(FILE *f)
 
 			/* Load flags. */
 
-			flags = strchr(depth_str, '\t');
+			flags = strchr((const char *)depth_str, '\t');
 			if (flags) {
 				*flags = '\0';
 				flags++;
@@ -82,7 +82,7 @@ read_bookmarks_default(FILE *f)
 
 		/* Load EOLN. */
 
-		line_end = strchr(flags ? flags : depth_str, '\n');
+		line_end = strchr((const char *)(flags ? flags : depth_str), '\n');
 		if (!line_end)
 			continue;
 		*line_end = '\0';
@@ -182,7 +182,7 @@ write_bookmarks_default(struct secure_save_info *ssi,
 	struct write_bookmarks_default out;
 
 	out.ssi = ssi;
-	out.save_folder_state = get_opt_bool("bookmarks.folder_state");
+	out.save_folder_state = get_opt_bool("bookmarks.folder_state", NULL);
 	out.codepage = get_cp_index("System");
 	out.conv_table = get_translation_table(get_cp_index("UTF-8"),
 					       out.codepage);

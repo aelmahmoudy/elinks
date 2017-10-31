@@ -23,6 +23,9 @@
 #include "main/select.h"
 #include "osdep/osdep.h"
 #include "osdep/signals.h"
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+# include "scripting/smjs/smjs.h"
+#endif
 #include "session/session.h"
 #include "terminal/draw.h"
 #include "terminal/event.h"
@@ -68,6 +71,19 @@ cls_redraw_all_terminals(void)
 		redraw_terminal_cls(term);
 }
 
+/** Get the terminal in which message boxes should be displayed, if
+ * there is no specific reason to use some other terminal.  This
+ * returns NULL if all terminals have been closed.  (ELinks keeps
+ * running anyway if ui.sessions.keep_session_active is true.)  */
+struct terminal *
+get_default_terminal(void)
+{
+	if (list_empty(terminals))
+		return NULL;
+	else
+		return terminals.next;
+}
+
 struct terminal *
 init_term(int fdin, int fdout)
 {
@@ -96,6 +112,8 @@ init_term(int fdin, int fdout)
 	term->spec = get_opt_rec(config_options, name);
 	object_lock(term->spec);
 
+	/* It's a new terminal, so assume the user is using it right now,
+	 * and sort it to the front of the list.  */
 	add_to_list(terminals, term);
 
 	set_handlers(fdin, (select_handler_T) in_term, NULL,
@@ -118,7 +136,7 @@ init_term(int fdin, int fdout)
 int
 get_terminal_codepage(const struct terminal *term)
 {
-	return get_opt_codepage_tree(term->spec, "charset");
+	return get_opt_codepage_tree(term->spec, "charset", NULL);
 }
 
 void
@@ -133,10 +151,15 @@ redraw_all_terminals(void)
 void
 destroy_terminal(struct terminal *term)
 {
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+	smjs_detach_terminal_object(term);
+#endif
 #ifdef CONFIG_BOOKMARKS
 	bookmark_auto_save_tabs(term);
 #endif
 	detach_downloads_from_terminal(term);
+
+	free_textarea_data(term);
 
 	/* delete_window doesn't update term->current_tab, but it
 	   calls redraw_terminal, which requires term->current_tab
@@ -190,7 +213,7 @@ static void
 check_if_no_terminal(void)
 {
 	program.terminate = list_empty(terminals)
-			    && !get_opt_bool("ui.sessions.keep_session_active");
+			    && !get_opt_bool("ui.sessions.keep_session_active", NULL);
 }
 
 void
@@ -221,8 +244,8 @@ unblock_terminal(struct terminal *term)
 		     (select_handler_T) destroy_terminal, term);
 	unblock_itrm();
 	redraw_terminal_cls(term);
-	if (textarea_editor)	/* XXX */
-		textarea_edit(1, NULL, NULL, NULL, NULL);
+	if (term->textarea_data)	/* XXX */
+		textarea_edit(1, term, NULL, NULL, NULL);
 }
 
 #ifndef CONFIG_FASTMEM
@@ -246,7 +269,7 @@ assert_terminal_ptr_not_dangling(const struct terminal *suspect)
 static void
 exec_on_master_terminal(struct terminal *term,
 			unsigned char *path, int plen,
-		 	unsigned char *delete, int dlen,
+		 	unsigned char *delete_, int dlen,
 			enum term_exec fg)
 {
 	int blockh;
@@ -257,7 +280,7 @@ exec_on_master_terminal(struct terminal *term,
 
 	param[0] = fg;
 	memcpy(param + 1, path, plen + 1);
-	memcpy(param + 1 + plen + 1, delete, dlen + 1);
+	memcpy(param + 1 + plen + 1, delete_, dlen + 1);
 
 	if (fg == TERM_EXEC_FG) block_itrm();
 
@@ -289,7 +312,7 @@ exec_on_master_terminal(struct terminal *term,
 static void
 exec_on_slave_terminal( struct terminal *term,
 		 	unsigned char *path, int plen,
-		 	unsigned char *delete, int dlen,
+		 	unsigned char *delete_, int dlen,
 			enum term_exec fg)
 {
 	int data_size = plen + dlen + 1 /* 0 */ + 1 /* fg */ + 2 /* 2 null char */;
@@ -300,14 +323,14 @@ exec_on_slave_terminal( struct terminal *term,
 	data[0] = 0;
 	data[1] = fg;
 	memcpy(data + 2, path, plen + 1);
-	memcpy(data + 2 + plen + 1, delete, dlen + 1);
+	memcpy(data + 2 + plen + 1, delete_, dlen + 1);
 	hard_write(term->fdout, data, data_size);
 	fmem_free(data);
 }
 
 void
 exec_on_terminal(struct terminal *term, unsigned char *path,
-		 unsigned char *delete, enum term_exec fg)
+		 unsigned char *delete_, enum term_exec fg)
 {
 	if (path) {
 		if (!*path) return;
@@ -321,7 +344,7 @@ exec_on_terminal(struct terminal *term, unsigned char *path,
 
 	if (term->master) {
 		if (!*path) {
-			dispatch_special(delete);
+			dispatch_special(delete_);
 			return;
 		}
 
@@ -329,18 +352,18 @@ exec_on_terminal(struct terminal *term, unsigned char *path,
 		 * in a blocked terminal?  There is similar code in
 		 * in_sock().  --KON, 2007 */
 		if (fg != TERM_EXEC_BG && is_blocked()) {
-			unlink(delete);
+			unlink(delete_);
 			return;
 		}
 
 		exec_on_master_terminal(term,
 					path, strlen(path),
-		 			delete, strlen(delete),
+		 			delete_, strlen(delete_),
 					fg);
 	} else {
 		exec_on_slave_terminal( term,
 					path, strlen(path),
-		 			delete, strlen(delete),
+		 			delete_, strlen(delete_),
 					fg);
 	}
 }
@@ -386,9 +409,9 @@ set_terminal_title(struct terminal *term, unsigned char *title)
 	from_cp = get_terminal_codepage(term);
 
 	/* In which codepage does the terminal want the title?  */
-	if (get_opt_bool_tree(term->spec, "latin1_title"))
+	if (get_opt_bool_tree(term->spec, "latin1_title", NULL))
 		to_cp = get_cp_index("ISO-8859-1");
-	else if (get_opt_bool_tree(term->spec, "utf_8_io"))
+	else if (get_opt_bool_tree(term->spec, "utf_8_io", NULL))
 		to_cp = get_cp_index("UTF-8");
 	else
 		to_cp = from_cp;

@@ -17,7 +17,6 @@
 #include "cache/cache.h"
 #include "dialogs/document.h"
 #include "document/document.h"
-#include "document/html/renderer.h"
 #include "document/view.h"
 #include "globhist/globhist.h"
 #include "intl/gettext/libintl.h"
@@ -114,6 +113,28 @@ add_link_info_to_string(struct string *msg, struct session *ses)
 	}
 }
 
+/* Link info message box. */
+void
+link_info_dialog(struct session *ses)
+{
+	struct terminal *term = ses->tab->term;
+	struct location *location = cur_loc(ses);
+	struct string msg;
+
+	if (!location) {
+		nowhere_box(term, NULL);
+		return;
+	}
+
+	if (!init_string(&msg)) return;
+
+	add_link_info_to_string(&msg, ses);
+
+	info_box(term, MSGBOX_FREE_TEXT | MSGBOX_SCROLLABLE,
+		 N_("Info"), ALIGN_LEFT, msg.source);
+}
+
+
 /* Location info. message box. */
 void
 document_info_dialog(struct session *ses)
@@ -121,7 +142,6 @@ document_info_dialog(struct session *ses)
 	struct terminal *term = ses->tab->term;
 	struct location *location = cur_loc(ses);
 	struct document_view *doc_view;
-	struct cache_entry *cached;
 	struct string msg;
 
 	if (!location) {
@@ -148,8 +168,8 @@ document_info_dialog(struct session *ses)
 
 	add_char_to_string(&msg, '\n');
 
-	cached = doc_view->document->cached;
-	if (cached) {
+	if (doc_view && doc_view->document->cached) {
+		struct cache_entry *cached = doc_view->document->cached;
 		unsigned char *a;
 
 		add_format_to_string(&msg, "\n%s: %" OFF_PRINT_FORMAT,
@@ -201,6 +221,13 @@ document_info_dialog(struct session *ses)
 			add_format_to_string(&msg, "\n%s: %s",
 					     _("Last modified", term),
 					     cached->last_modified);
+		}
+
+		if (!cached->incomplete) {
+			add_format_to_string(&msg, "\n%s: ",
+					     _("Time since loading", term));
+			add_duration_to_string(&msg,
+			                       time(NULL) - cached->seconds);
 		}
 
 	}

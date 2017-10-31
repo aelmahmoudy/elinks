@@ -85,7 +85,7 @@ struct listbox_ops {
 	/* Delete the listbox item object, its data and all nested listboxes.
 	 * @last is non zero when either deleting only one item or when
 	 * deleting the last item. */
-	void (*delete)(struct listbox_item *, int last);
+	void (*delete_)(struct listbox_item *, int last);
 
 	/* If defined it means that the it will control all drawing of the
 	 * listbox item text and what might else be possible on the screen on
@@ -133,7 +133,7 @@ struct listbox_item {
 
 extern const struct widget_ops listbox_ops;
 
-void dlg_format_listbox(struct terminal *, struct widget_data *, int, int *, int, int, int *, enum format_align, int format_only);
+void dlg_format_listbox(struct dialog_data *, struct widget_data *, int, int *, int, int, int *, enum format_align, int format_only);
 
 struct listbox_item *traverse_listbox_items_list(struct listbox_item *, struct listbox_data *, int, int, int (*)(struct listbox_item *, void *, int *), void *);
 

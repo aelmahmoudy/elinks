@@ -20,6 +20,7 @@
 
 #include "config/conf.h"
 #include "config/dialogs.h"
+#include "config/domain.h"
 #include "config/home.h"
 #include "config/kbdbind.h"
 #include "config/options.h"
@@ -56,19 +57,21 @@
  * value to an option, but sometimes you may want to first create the option
  * ;). Then this will come handy. */
 
+struct conf_parsing_pos {
+	/** Points to the next character to be parsed from the
+	 * configuration file.  */
+	unsigned char *look;
+
+	/** The line number corresponding to #look.  This is
+	 * shown in error messages.  */
+	int line;
+};
+
 struct conf_parsing_state {
 	/** This part may be copied to a local variable as a bookmark
 	 * and restored later.  So it must not contain any pointers
 	 * that would have to be freed in that situation.  */
-	struct conf_parsing_pos {
-		/** Points to the next character to be parsed from the
-		 * configuration file.  */
-		unsigned char *look;
-
-		/** The line number corresponding to #look.  This is
-		 * shown in error messages.  */
-		int line;
-	} pos;
+	struct conf_parsing_pos pos;
 
 	/** When ELinks is rewriting the configuration file, @c mirrored
 	 * indicates the end of the part that has already been copied
@@ -196,15 +199,28 @@ skip_to_unquoted_newline_or_comment(struct conf_parsing_pos *pos)
  * We will only possibly set or clear OPT_MUST_SAVE flag in the option.  */
 
 static enum parse_error
-parse_set(struct option *opt_tree, struct conf_parsing_state *state,
-	  struct string *mirror, int is_system_conf)
+parse_set_common(struct option *opt_tree, struct conf_parsing_state *state,
+		 struct string *mirror, int is_system_conf, int want_domain)
 {
+	const unsigned char *domain_orig = NULL;
+	size_t domain_len = 0;
+	unsigned char *domain_copy = NULL;
 	const unsigned char *optname_orig;
 	size_t optname_len;
 	unsigned char *optname_copy;
 
 	skip_white(&state->pos);
 	if (!*state->pos.look) return show_parse_error(state, ERROR_PARSE);
+
+	if (want_domain) {
+		domain_orig = state->pos.look;
+		while (isident(*state->pos.look) || *state->pos.look == '*'
+		       || *state->pos.look == '.' || *state->pos.look == '+')
+			state->pos.look++;
+		domain_len = state->pos.look - domain_orig;
+
+		skip_white(&state->pos);
+	}
 
 	/* Option name */
 	optname_orig = state->pos.look;
@@ -225,6 +241,13 @@ parse_set(struct option *opt_tree, struct conf_parsing_state *state,
 
 	optname_copy = memacpy(optname_orig, optname_len);
 	if (!optname_copy) return show_parse_error(state, ERROR_NOMEM);
+	if (want_domain) {
+		domain_copy = memacpy(domain_orig, domain_len);
+		if (!domain_copy) {
+			mem_free(optname_copy);
+			return show_parse_error(state, ERROR_NOMEM);
+		}
+	}
 
 	/* Option value */
 	{
@@ -232,9 +255,42 @@ parse_set(struct option *opt_tree, struct conf_parsing_state *state,
 		unsigned char *val;
 		const struct conf_parsing_pos pos_before_value = state->pos;
 
-		opt = mirror
-			? get_opt_rec_real(opt_tree, optname_copy)
-			: get_opt_rec(opt_tree, optname_copy);
+		if (want_domain && *domain_copy) {
+			struct option *domain_tree;
+
+			domain_tree = get_domain_tree(domain_copy);
+			if (!domain_tree) {
+				mem_free(domain_copy);
+				mem_free(optname_copy);
+				skip_option_value(&state->pos);
+				return show_parse_error(state, ERROR_NOMEM);
+			}
+
+			if (mirror) {
+				opt = get_opt_rec_real(domain_tree,
+						       optname_copy);
+			} else {
+				opt = get_opt_rec(opt_tree, optname_copy);
+				if (opt) {
+					opt = get_option_shadow(opt, opt_tree,
+								domain_tree);
+					if (!opt) {
+						mem_free(domain_copy);
+						mem_free(optname_copy);
+						skip_option_value(&state->pos);
+						return show_parse_error(state,
+									ERROR_NOMEM);
+					}
+				}
+			}
+		} else {
+			opt = mirror
+				? get_opt_rec_real(opt_tree, optname_copy)
+				: get_opt_rec(opt_tree, optname_copy);
+		}
+		if (want_domain)
+			mem_free(domain_copy);
+		domain_copy = NULL;
 		mem_free(optname_copy);
 		optname_copy = NULL;
 
@@ -327,6 +383,21 @@ parse_set(struct option *opt_tree, struct conf_parsing_state *state,
 
 	return ERROR_NONE;
 }
+
+static enum parse_error
+parse_set_domain(struct option *opt_tree, struct conf_parsing_state *state,
+                 struct string *mirror, int is_system_conf)
+{
+	return parse_set_common(opt_tree, state, mirror, is_system_conf, 1);
+}
+
+static enum parse_error
+parse_set(struct option *opt_tree, struct conf_parsing_state *state,
+          struct string *mirror, int is_system_conf)
+{
+	return parse_set_common(opt_tree, state, mirror, is_system_conf, 0);
+}
+
 
 static enum parse_error
 parse_unset(struct option *opt_tree, struct conf_parsing_state *state,
@@ -555,6 +626,7 @@ struct parse_handler {
 };
 
 static const struct parse_handler parse_handlers[] = {
+	{ "set_domain", parse_set_domain },
 	{ "set", parse_set },
 	{ "unset", parse_unset },
 	{ "bind", parse_bind },
@@ -851,6 +923,8 @@ out_of_memory:
 	done_string(&indent);
 }
 
+static unsigned char *smart_config_output_fn_domain;
+
 static void
 smart_config_output_fn(struct string *string, struct option *option,
 		       unsigned char *path, int depth, int do_print_comment,
@@ -892,7 +966,13 @@ smart_config_output_fn(struct string *string, struct option *option,
 			if (option->flags & OPT_DELETED) {
 				add_to_string(string, "un");
 			}
-			add_to_string(string, "set ");
+			if (smart_config_output_fn_domain) {
+				add_to_string(string, "set_domain ");
+				add_to_string(string, smart_config_output_fn_domain);
+				add_char_to_string(string, ' ');
+			} else {
+				add_to_string(string, "set ");
+			}
 			if (path) {
 				add_to_string(string, path);
 				add_char_to_string(string, '.');
@@ -933,20 +1013,28 @@ add_cfg_header_to_string(struct string *string, unsigned char *text)
 }
 
 unsigned char *
-create_config_string(unsigned char *prefix, unsigned char *name,
-		     struct option *options)
+create_config_string(unsigned char *prefix, unsigned char *name)
 {
+	struct option *options = config_options;
 	struct string config;
 	/* Don't write headers if nothing will be added anyway. */
 	struct string tmpstring;
 	int origlen;
-	int savestyle = get_opt_int("config.saving_style");
-	int i18n = get_opt_bool("config.i18n");
+	int savestyle = get_opt_int("config.saving_style", NULL);
+	int i18n = get_opt_bool("config.i18n", NULL);
 
 	if (!init_string(&config)) return NULL;
 
-	prepare_mustsave_flags(options->value.tree,
-			       savestyle == 1 || savestyle == 2);
+	{
+		int set_all = (savestyle == 1 || savestyle == 2);
+		struct domain_tree *domain;
+		
+		prepare_mustsave_flags(options->value.tree, set_all);
+		foreach (domain, domain_trees) {
+			prepare_mustsave_flags(domain->tree->value.tree,
+					       set_all);
+		}
+	}
 
 	/* Scaring. */
 	if (savestyle == 2
@@ -996,8 +1084,8 @@ create_config_string(unsigned char *prefix, unsigned char *name,
 
 	if (savestyle == 0) goto get_me_out;
 
-	indentation = get_opt_int("config.indentation");
-	comments = get_opt_int("config.comments");
+	indentation = get_opt_int("config.indentation", NULL);
+	comments = get_opt_int("config.comments", NULL);
 
 	if (!init_string(&tmpstring)) goto get_me_out;
 
@@ -1007,6 +1095,21 @@ create_config_string(unsigned char *prefix, unsigned char *name,
 	origlen = tmpstring.length;
 	smart_config_string(&tmpstring, 2, i18n, options->value.tree, NULL, 0,
 			    smart_config_output_fn);
+
+	{
+		struct domain_tree *domain;
+
+		foreach (domain, domain_trees) {
+			smart_config_output_fn_domain = domain->name;
+			smart_config_string(&tmpstring, 2, i18n,
+					    domain->tree->value.tree,
+					    NULL, 0,
+					    smart_config_output_fn);
+		}
+
+		smart_config_output_fn_domain = NULL;
+	}
+
 	if (tmpstring.length > origlen)
 		add_string_to_string(&config, &tmpstring);
 	done_string(&tmpstring);
@@ -1028,12 +1131,12 @@ get_me_out:
 
 static int
 write_config_file(unsigned char *prefix, unsigned char *name,
-		  struct option *options, struct terminal *term)
+                  struct terminal *term)
 {
 	int ret = -1;
 	struct secure_save_info *ssi;
 	unsigned char *config_file = NULL;
-	unsigned char *cfg_str = create_config_string(prefix, name, options);
+	unsigned char *cfg_str = create_config_string(prefix, name);
 	int prefixlen = strlen(prefix);
 	int prefix_has_slash = (prefixlen && dir_sep(prefix[prefixlen - 1]));
 	int name_has_slash = dir_sep(name[0]);
@@ -1050,8 +1153,13 @@ write_config_file(unsigned char *prefix, unsigned char *name,
 	if (ssi) {
 		secure_fputs(ssi, cfg_str);
 		ret = secure_close(ssi);
-		if (!ret)
-			untouch_options(options->value.tree);
+		if (!ret) {
+			struct domain_tree *domain;
+
+			untouch_options(config_options->value.tree);
+			foreach (domain, domain_trees)
+				untouch_options(domain->tree->value.tree);
+		}
 	}
 
 	write_config_dialog(term, config_file, secsave_errno, ret);
@@ -1075,5 +1183,5 @@ write_config(struct terminal *term)
 	}
 
 	return write_config_file(elinks_home, get_cmd_opt_str("config-file"),
-				 config_options, term);
+	                         term);
 }

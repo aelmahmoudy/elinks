@@ -31,6 +31,7 @@
 #include "util/memory.h"
 #include "util/snprintf.h"
 #include "util/string.h"
+#include "viewer/text/textarea.h"
 #include "viewer/timer.h"
 
 
@@ -189,7 +190,7 @@ check_terminal_name(struct terminal *term, struct terminal_info *info)
 	 * places assume that the terminal's charset is unibyte if
 	 * UTF-8 I/O is disabled.  (bug 827) */
 	term->utf8_io = term->utf8_cp
-		|| get_opt_bool_tree(term->spec, "utf_8_io");
+		|| get_opt_bool_tree(term->spec, "utf_8_io", NULL);
 #endif /* CONFIG_UTF8 */
 }
 
@@ -269,6 +270,13 @@ handle_interlink_event(struct terminal *term, struct interlink_event *ilev)
 				  ilev->info.size.width,
 				  ilev->info.size.height);
 		term_send_event(term, &tev);
+
+		/* If textarea_data is set and the terminal is not blocked,
+		 * then this resize event must be the result of exiting the
+		 * external editor. */
+		if (term->textarea_data && term->blocked == -1)
+			textarea_edit(1, term, NULL, NULL, NULL);
+
 		break;
 
 	case EVENT_MOUSE:
@@ -292,11 +300,7 @@ handle_interlink_event(struct terminal *term, struct interlink_event *ilev)
 
 		reset_timer();
 
-		if (modifier == KBD_MOD_CTRL && (key == 'l' || key == 'L')) {
-			redraw_terminal_cls(term);
-			break;
-
-		} else if (key == KBD_CTRL_C) {
+		if (key == KBD_CTRL_C) {
 			destroy_terminal(term);
 			return 0;
 		}
@@ -322,7 +326,7 @@ handle_interlink_event(struct terminal *term, struct interlink_event *ilev)
 		 *   this codepage cannot be UTF-8.
 		 * - Otherwise, handle_interlink_event() passes the
 		 *   bytes straight through.  */
-		utf8_io = get_opt_bool_tree(term->spec, "utf_8_io");
+		utf8_io = get_opt_bool_tree(term->spec, "utf_8_io", NULL);
 #endif /* CONFIG_UTF8 */
 
 		/* In UTF-8 byte sequences that have more than one byte, the
@@ -454,6 +458,9 @@ in_term(struct terminal *term)
 	struct terminal_interlink *interlink = term->interlink;
 	ssize_t r;
 	unsigned char *iq;
+
+	/* Mark this as the most recently used terminal.  */
+	move_to_top_of_list(terminals, term);
 
 	if (!interlink
 	    || !interlink->qfreespace

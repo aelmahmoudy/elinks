@@ -96,6 +96,10 @@ def pre_format_html_hook(url, html):
     elif url.startswith("https://www.mbank.com.pl/ib_navibar_3.asp"):
         return html.replace('<td valign="top"><img',
                             '<tr><td valign="top"><img')
+    elif url.startswith("http://lp3.polskieradio.pl/"):
+        from lp3 import lp3
+        return lp3(html)
+
 
 def proxy_for_hook(url):
     """Determine what proxy server to use for a given URL.

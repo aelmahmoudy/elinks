@@ -10,6 +10,39 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/types.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h> /* OS/2 needs this after sys/types.h */
+#endif
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h> /* OS/2 needs this after sys/types.h */
+#endif
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h> /* OS/2 needs this after sys/types.h */
+#endif
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h> /* socklen_t for MinGW */
+#endif
+
+#ifdef HAVE_GETIFADDRS
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#ifdef HAVE_NET_IF_H
+#include <net/if.h>
+#endif
+#ifdef HAVE_IFADDRS_H
+#include <ifaddrs.h>		/* getifaddrs() */
+#endif
+#endif				/* HAVE_GETIFADDRS */
+
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
+
 #include "elinks.h"
 
 #include "cache/cache.h"
@@ -24,6 +57,7 @@
 #include "document/refresh.h"
 #include "main/module.h"
 #include "main/object.h"
+#include "network/dns.h"
 #include "protocol/uri.h"
 #include "terminal/draw.h"
 #include "util/color.h"
@@ -35,6 +69,46 @@
 
 static INIT_LIST_OF(struct document, format_cache);
 
+#ifdef HAVE_INET_NTOP
+/* DNS callback. */
+static void
+found_dns(void *data, struct sockaddr_storage *addr, int addrlen)
+{
+	unsigned char buf[64];
+	const unsigned char *res;
+	struct sockaddr *s;
+	unsigned char **ip = (unsigned char **)data;
+	void *src;
+
+	if (!ip || !addr) return;
+	s = (struct sockaddr *)addr;
+	if (s->sa_family == AF_INET6) {
+		src = &(((struct sockaddr_in6 *)s)->sin6_addr.s6_addr);
+	} else {
+		src = &(((struct sockaddr_in *)s)->sin_addr.s_addr);
+	}
+	res = inet_ntop(s->sa_family, src, buf, 64);
+	if (res) {
+		*ip = stracpy(res);
+	}
+}
+#endif
+
+static void
+get_ip(struct document *document)
+{
+#ifdef HAVE_INET_NTOP
+	struct uri *uri = document->uri;
+	char tmp;
+
+	if (!uri || !uri->host || !uri->hostlen) return;
+	tmp = uri->host[uri->hostlen];
+	uri->host[uri->hostlen] = 0;
+	find_host(uri->host, &document->querydns, found_dns, &document->ip, 0);
+	uri->host[uri->hostlen] = tmp;
+#endif
+}
+
 struct document *
 init_document(struct cache_entry *cached, struct document_options *options)
 {
@@ -43,6 +117,8 @@ init_document(struct cache_entry *cached, struct document_options *options)
 	if (!document) return NULL;
 
 	document->uri = get_uri_reference(cached->uri);
+
+	get_ip(document);
 
 	object_lock(cached);
 	document->cache_id = cached->cache_id;
@@ -56,6 +132,10 @@ init_document(struct cache_entry *cached, struct document_options *options)
 	init_list(document->onload_snippets);
 #endif
 
+#ifdef CONFIG_COMBINE
+	document->comb_x = -1;
+	document->comb_y = -1;
+#endif
 	object_nolock(document, "document");
 	object_lock(document);
 
@@ -117,6 +197,8 @@ done_document(struct document *document)
 	object_unlock(document->cached);
 
 	if (document->uri) done_uri(document->uri);
+	if (document->querydns) kill_dns_request(&document->querydns);
+	mem_free_if(document->ip);
 	mem_free_if(document->title);
 	if (document->frame_desc) free_frameset_desc(document->frame_desc);
 	if (document->refresh) done_document_refresh(document->refresh);
@@ -222,18 +304,18 @@ get_document_css_magic(struct document *document)
 #endif
 
 void
-update_cached_document_options(void)
+update_cached_document_options(struct session *ses)
 {
 	struct document *document;
 	struct active_link_options active_link;
 
 	memset(&active_link, 0, sizeof(active_link));	/* Safer. */
-	active_link.fg = get_opt_color("document.browse.links.active_link.colors.text");
-	active_link.bg = get_opt_color("document.browse.links.active_link.colors.background");
-	active_link.color = get_opt_bool("document.browse.links.active_link.enable_color");
-	active_link.invert = get_opt_bool("document.browse.links.active_link.invert");
-	active_link.underline = get_opt_bool("document.browse.links.active_link.underline");
-	active_link.bold = get_opt_bool("document.browse.links.active_link.bold");
+	active_link.color.foreground = get_opt_color("document.browse.links.active_link.colors.text", ses);
+	active_link.color.background = get_opt_color("document.browse.links.active_link.colors.background", ses);
+	active_link.enable_color = get_opt_bool("document.browse.links.active_link.enable_color", ses);
+	active_link.invert = get_opt_bool("document.browse.links.active_link.invert", ses);
+	active_link.underline = get_opt_bool("document.browse.links.active_link.underline", ses);
+	active_link.bold = get_opt_bool("document.browse.links.active_link.bold", ses);
 
 	foreach (document, format_cache) {
 		copy_struct(&document->options.active_link, &active_link);
@@ -274,7 +356,7 @@ void
 shrink_format_cache(int whole)
 {
 	struct document *document, *next;
-	int format_cache_size = get_opt_int("document.cache.format.size");
+	int format_cache_size = get_opt_int("document.cache.format.size", NULL);
 	int format_cache_entries = 0;
 
 	foreachsafe (document, next, format_cache) {

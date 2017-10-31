@@ -105,7 +105,7 @@ enum bencoding_token {
 static inline void
 scan_bencoding_token(struct scanner *scanner, struct scanner_token *token)
 {
-	unsigned char *string = scanner->position;
+	const unsigned char *string = scanner->position;
 	unsigned char first_char = *string;
 	enum bencoding_token type = BENCODING_TOKEN_NONE;
 	int real_length = -1;
@@ -136,7 +136,7 @@ scan_bencoding_token(struct scanner *scanner, struct scanner_token *token)
 		type = BENCODING_TOKEN_END;
 
 	} else if (is_bencoding_integer(first_char)) {
-		unsigned char *integer_start = string;
+		const unsigned char *integer_start = string;
 
 		/* Signedness. */
 		if (*string == '-') string++;
@@ -396,7 +396,7 @@ normalize_bencoding_path(const unsigned char *path, int pathlen,
  * checked for sanity. */
 static enum bittorrent_state
 add_bittorrent_file(struct bittorrent_meta *meta, unsigned char *path,
-		    struct bittorrent_file *template)
+		    struct bittorrent_file *template_)
 {
 	struct bittorrent_file *file;
 	int malicious;
@@ -417,7 +417,7 @@ add_bittorrent_file(struct bittorrent_meta *meta, unsigned char *path,
 		return BITTORRENT_STATE_OUT_OF_MEM;
 	}
 
-	copy_struct(file, template);
+	copy_struct(file, template_);
 	memcpy(file->name, path, pathlen);
 	mem_free(path);
 
@@ -691,7 +691,8 @@ check_bittorrent_metafile(struct bittorrent_meta *meta)
 }
 
 enum bittorrent_state
-parse_bittorrent_metafile(struct bittorrent_meta *meta, struct string *metafile)
+parse_bittorrent_metafile(struct bittorrent_meta *meta,
+			  struct bittorrent_const_string *metafile)
 {
 	struct scanner scanner;
 
@@ -917,7 +918,7 @@ parse_bencoding_peers_string(struct bittorrent_connection *bittorrent,
 
 enum bittorrent_state
 parse_bittorrent_tracker_response(struct bittorrent_connection *bittorrent,
-				  struct string *response)
+				  struct bittorrent_const_string *response)
 {
 	struct scanner scanner;
 

@@ -21,13 +21,19 @@ enum text_style_format {
 	AT_NO_ENTITIES = 64,
 };
 
-struct text_style {
-	enum text_style_format attr;
-	color_T fg;
-	color_T bg;
+struct text_style_color {
+	color_T foreground;
+	color_T background;
 };
 
-void get_screen_char_template(struct screen_char *template, struct document_options *options, struct text_style style);
+struct text_style {
+	enum text_style_format attr;
+	struct text_style_color color;
+};
+
+#define INIT_TEXT_STYLE(attr, fg, bg)  { attr, {fg, bg}}
+
+void get_screen_char_template(struct screen_char *template_, struct document_options *options, struct text_style style);
 
 #endif
 

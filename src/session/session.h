@@ -35,6 +35,7 @@ enum remote_session_flags {
 	SES_REMOTE_PING = 16,
 	SES_REMOTE_ADD_BOOKMARK = 32,
 	SES_REMOTE_INFO_BOX = 64,
+	SES_REMOTE_RELOAD = 128,
 };
 
 /** This is generic frame descriptor, meaningful mainly for ses_*_frame*(). */
@@ -47,6 +48,8 @@ struct frame {
 	struct view_state vs;
 };
 
+enum kp_mark { KP_MARK_NOTHING, KP_MARK_SET, KP_MARK_GOTO };
+
 /** Use for keyboard prefixes. */
 struct kbdprefix {
 	/** This is the repeat count being inserted by user so far.
@@ -56,7 +59,7 @@ struct kbdprefix {
 #ifdef CONFIG_MARKS
 	/** If the previous key was a mark prefix, this describes what kind
 	 * of action are we supposed to do when we receive the next key. */
-	enum { KP_MARK_NOTHING, KP_MARK_SET, KP_MARK_GOTO } mark;
+	enum kp_mark mark;
 #endif
 };
 
@@ -103,6 +106,7 @@ struct session_status {
 	struct led *insert_mode_led;
 	struct led *ecmascript_led;
 	struct led *popup_led;
+	struct led *download_led;
 #endif
 	/** Has the tab been visited yet. */
 	unsigned int visited:1;
@@ -133,16 +137,27 @@ struct session {
 	LIST_HEAD(struct session);
 
 
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+	struct JSObject *jsobject;      /* Instance of session_class */
+#endif
+
 	/** @name The vital session data
 	 * @{ */
 
 	struct window *tab;
+
+	/* Session-specific options */
+
+	struct option *option;
 
 
 	/** @} @name Browsing history
 	 * @{ */
 
 	struct ses_history history;
+#ifdef CONFIG_SCRIPTING_SPIDERMONKEY
+	struct JSObject *history_jsobject;      /* Instance of location_array_class */
+#endif
 
 
 	/** @} @name The current document
@@ -153,7 +168,7 @@ struct session {
 	struct download loading;
 	struct uri *loading_uri;
 
-	enum cache_mode reloadlevel;
+	int reloadlevel;
 	int redirect_cnt;
 
 	struct document_view *doc_view;
@@ -262,6 +277,7 @@ struct session *init_session(struct session *ses, struct terminal *term,
 void doc_loading_callback(struct download *, struct session *);
 
 void abort_loading(struct session *, int);
+void reload_frame(struct session *, unsigned char *, enum cache_mode);
 void reload(struct session *, enum cache_mode);
 void load_frames(struct session *, struct document_view *);
 
@@ -293,5 +309,9 @@ unsigned char *get_homepage_url(void);
 
 /** Returns current keyboard repeat count and reset it. */
 int eat_kbd_repeat_count(struct session *ses);
+
+/** Set current keyboard repeat count to given value and update link
+ * highlighting and status bar. */
+int set_kbd_repeat_count(struct session *ses, int new_count);
 
 #endif

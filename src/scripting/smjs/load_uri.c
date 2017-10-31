@@ -9,6 +9,7 @@
 #include "ecmascript/spidermonkey-shared.h"
 #include "network/connection.h"
 #include "protocol/uri.h"
+#include "protocol/protocol.h"
 #include "scripting/smjs/core.h"
 #include "scripting/smjs/cache_object.h"
 #include "scripting/smjs/elinks_object.h"
@@ -56,7 +57,7 @@ smjs_loading_callback(struct download *download, void *data)
 end:
 	if (download->cached)
 		object_unlock(download->cached);
-	JS_RemoveRoot(smjs_ctx, &hop->callback);
+	JS_RemoveValueRoot(smjs_ctx, &hop->callback);
 	mem_free(download->data);
 	mem_free(download);
 
@@ -64,22 +65,32 @@ end:
 }
 
 static JSBool
-smjs_load_uri(JSContext *ctx, JSObject *obj, uintN argc, jsval *argv,
-              jsval *rval)
+smjs_load_uri(JSContext *ctx, uintN argc, jsval *rval)
 {
+	jsval *argv = JS_ARGV(ctx, rval);
 	struct smjs_load_uri_hop *hop;
 	struct download *download;
 	JSString *jsstr;
+	protocol_external_handler_T *external_handler;
 	unsigned char *uri_string;
 	struct uri *uri;
 
 	if (argc < 2) return JS_FALSE;
 
 	jsstr = JS_ValueToString(smjs_ctx, argv[0]);
-	uri_string = JS_GetStringBytes(jsstr);
+	uri_string = JS_EncodeString(smjs_ctx, jsstr);
+	if (!uri_string || !*uri_string) return JS_FALSE;
 
 	uri = get_uri(uri_string, 0);
 	if (!uri) return JS_FALSE;
+
+	external_handler = get_protocol_external_handler(NULL, uri);
+	if (external_handler) {
+		/* Because smjs_load_uri is carrying out an asynchronous
+		 * operation, it is inappropriate to call an external
+		 * handler here, so just return.  */
+		return JS_FALSE;
+	}
 
 	download = mem_alloc(sizeof(*download));
 	if (!download) {
@@ -96,7 +107,7 @@ smjs_load_uri(JSContext *ctx, JSObject *obj, uintN argc, jsval *argv,
 
 	hop->callback = argv[1];
 	hop->ses = smjs_ses;
-	if (!JS_AddNamedRoot(smjs_ctx, &hop->callback,
+	if (!JS_AddNamedValueRoot(smjs_ctx, &hop->callback,
 			     "smjs_load_uri_hop.callback")) {
 		mem_free(hop);
 		mem_free(download);

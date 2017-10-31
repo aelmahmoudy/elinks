@@ -730,7 +730,15 @@ tab-external-command actions.
 <ul><li>%c in the string means the current URL</li>
 <li>%% in the string means '%'</li>
 </ul><p>Do <strong>not</strong> put single- or double-quotes around %c.
-</p></dd></dl><h3 id="infofiles">infofiles (Information files)</h3>
+</p></dd></dl><h3 id="ecmascript">ecmascript (ECMAScript)</h3>
+<p>ECMAScript options.
+</p><dl><dt id="ecmascript.enable">ecmascript.enable [0|1] (default: 0)</dt><dd>Whether to run those scripts inside of documents.
+</dd><dt id="ecmascript.error_reporting">ecmascript.error_reporting [0|1] (default: 0)</dt><dd>Open a message box when a script reports an error.
+</dd><dt id="ecmascript.ignore_noscript">ecmascript.ignore_noscript [0|1] (default: 0)</dt><dd>Whether to ignore content enclosed by the &#60;noscript&#62; tag when
+ECMAScript is enabled.
+</dd><dt id="ecmascript.max_exec_time">ecmascript.max_exec_time &#60;num&#62; (default: 5)</dt><dd>Maximum execution time in seconds for a script.
+</dd><dt id="ecmascript.block_window_opening">ecmascript.block_window_opening [0|1] (default: 0)</dt><dd>Whether to disallow scripts to open new windows or tabs.
+</dd></dl><h3 id="infofiles">infofiles (Information files)</h3>
 <p>Options for information files in <tt>~/.elinks</tt>.
 </p><dl><dt id="infofiles.save_interval">infofiles.save_interval &#60;num&#62; (default: 300)</dt><dd>Interval at which to trigger information files in <tt>~/.elinks</tt> to be
 saved to disk if they have changed (seconds; 0 to disable)
@@ -888,6 +896,9 @@ open 'filename' with some encoding extension appended (ie.
 <p>Local CGI specific options.
 </p><dl><dt id="protocol.file.cgi.path">protocol.file.cgi.path &#60;str&#62; (default: "")</dt><dd>Colon separated list of directories, where CGI scripts are stored.
 </dd><dt id="protocol.file.cgi.policy">protocol.file.cgi.policy [0|1] (default: 0)</dt><dd>Whether to execute local CGI scripts.
+</dd></dl><h3 id="protocol.fsp">protocol.fsp (FSP)</h3>
+<p>FSP specific options.
+</p><dl><dt id="protocol.fsp.sort">protocol.fsp.sort [0|1] (default: 1)</dt><dd>Whether to sort entries in directory listings.
 </dd></dl><h3 id="protocol.ftp">protocol.ftp (FTP)</h3>
 <p>FTP specific options.
 </p><dl><dt id="protocol.ftp.anon_passwd">protocol.ftp.anon_passwd &#60;str&#62; (default: "some@host.domain")</dt><dd>FTP anonymous password to be sent.
@@ -1494,7 +1505,7 @@ enough for just everyone (TM).
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 28-Oct-2012 15:01:58 EEST
+Last updated 30-Oct-2012 19:27:12 EEST
 </div>
 </div>
 </body>

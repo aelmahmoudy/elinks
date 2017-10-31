@@ -42,7 +42,7 @@ static void
 set_bittorrent_connection_timer(struct connection *conn)
 {
 	struct bittorrent_connection *bittorrent = conn->info;
-	milliseconds_T interval = sec_to_ms(get_opt_int("protocol.bittorrent.choke_interval"));
+	milliseconds_T interval = sec_to_ms(get_opt_int("protocol.bittorrent.choke_interval", NULL));
 
 	install_timer(&bittorrent->timer, interval,
 		      (void (*)(void *)) update_bittorrent_connection_state,
@@ -93,15 +93,15 @@ update_bittorrent_connection_state(struct connection *conn)
 	struct bittorrent_connection *bittorrent = conn->info;
 	struct bittorrent_peer_connection *peer, *next_peer;
 	int peer_conns, max_peer_conns;
-	int min_uploads = get_opt_int("protocol.bittorrent.min_uploads");
-	int max_uploads = get_opt_int("protocol.bittorrent.max_uploads");
+	int min_uploads = get_opt_int("protocol.bittorrent.min_uploads", NULL);
+	int max_uploads = get_opt_int("protocol.bittorrent.max_uploads", NULL);
 
 	set_bittorrent_connection_timer(conn);
 	/* The expired timer ID has now been erased.  */
 	set_connection_timeout(conn);
 
 	peer_conns = list_size(&bittorrent->peers);
-	max_peer_conns = get_opt_int("protocol.bittorrent.peerwire.connections");
+	max_peer_conns = get_opt_int("protocol.bittorrent.peerwire.connections", NULL);
 
 	/* First ``age'' the peer rates _before_ the sorting. */
 	foreach (peer, bittorrent->peers)
@@ -168,7 +168,7 @@ update_bittorrent_connection_state(struct connection *conn)
 	/* Shrink the peer pool. */
 	if (!list_empty(bittorrent->peers)) {
 		struct bittorrent_peer *peer_info, *next_peer_info;
-		int pool_size = get_opt_int("protocol.bittorrent.peerwire.pool_size");
+		int pool_size = get_opt_int("protocol.bittorrent.peerwire.pool_size", NULL);
 		int pool_peers = 0;
 
 		foreachsafe (peer_info, next_peer_info, bittorrent->peer_pool) {
@@ -186,9 +186,7 @@ update_bittorrent_connection_state(struct connection *conn)
 	}
 }
 
-/* Progress timer callback for @bittorrent->upload_progress.  As
- * explained in @start_update_progress, this function must erase the
- * expired timer ID from @bittorrent->upload_progress->timer.  */
+/* Progress timer callback for @bittorrent->upload_progress.  */
 static void
 update_bittorrent_connection_upload(void *data)
 {
@@ -198,7 +196,6 @@ update_bittorrent_connection_upload(void *data)
 			bittorrent->uploaded,
 			bittorrent->downloaded,
 			bittorrent->uploaded);
-	/* The expired timer ID has now been erased.  */
 }
 
 void
@@ -250,6 +247,7 @@ done_bittorrent_connection(struct connection *conn)
 	struct bittorrent_peer_connection *peer, *next;
 
 	assert(bittorrent);
+	assert(conn->done == done_bittorrent_connection);
 
 	/* We don't want the tracker to see the fetch. */
 	if (bittorrent->fetch)
@@ -270,6 +268,7 @@ done_bittorrent_connection(struct connection *conn)
 	free_list(bittorrent->peer_pool);
 
 	mem_free_set(&conn->info, NULL);
+	conn->done = NULL;
 }
 
 static struct bittorrent_connection *
@@ -277,12 +276,17 @@ init_bittorrent_connection(struct connection *conn)
 {
 	struct bittorrent_connection *bittorrent;
 
+	assert(conn->info == NULL);
+	assert(conn->done == NULL);
+	if_assert_failed return NULL;
+
 	bittorrent = mem_calloc(1, sizeof(*bittorrent));
 	if (!bittorrent) return NULL;
 
 	init_list(bittorrent->peers);
 	init_list(bittorrent->peer_pool);
 
+	/* conn->info and conn->done were asserted as NULL above.  */
 	conn->info = bittorrent;
 	conn->done = done_bittorrent_connection;
 
@@ -317,7 +321,7 @@ bittorrent_resume_callback(struct bittorrent_connection *bittorrent)
 /* Metainfo file download callback */
 static void
 bittorrent_metainfo_callback(void *data, struct connection_state state,
-			     struct string *response)
+			     struct bittorrent_const_string *response)
 {
 	struct connection *conn = data;
 	struct bittorrent_connection *bittorrent = conn->info;

@@ -68,18 +68,20 @@ enum link_type {
 	LINK_AREA,
 };
 
+enum script_event_hook_type {
+	SEVHOOK_ONCLICK,
+	SEVHOOK_ONDBLCLICK,
+	SEVHOOK_ONMOUSEOVER,
+	SEVHOOK_ONHOVER,
+	SEVHOOK_ONFOCUS,
+	SEVHOOK_ONMOUSEOUT,
+	SEVHOOK_ONBLUR,
+};
+
 struct script_event_hook {
 	LIST_HEAD(struct script_event_hook);
 
-	enum script_event_hook_type {
-		SEVHOOK_ONCLICK,
-		SEVHOOK_ONDBLCLICK,
-		SEVHOOK_ONMOUSEOVER,
-		SEVHOOK_ONHOVER,
-		SEVHOOK_ONFOCUS,
-		SEVHOOK_ONMOUSEOUT,
-		SEVHOOK_ONBLUR,
-	} type;
+	enum script_event_hook_type type;
 	unsigned char *src;
 };
 
@@ -133,10 +135,39 @@ struct link {
 	(!link_is_form(link) ? (link)->data.name : NULL)
 
 #ifdef CONFIG_UTF8
+/** A searchable character on the document canvas.
+ *
+ * struct document.search is an array of struct search, initialised by
+ * get_src, q.v.  The elements of the array roughly correspond to the document
+ * canvas, document.data; each element corresponds to a regular character, a
+ * run of one or more control characters, or the end of a line on the canvas.
+ *
+ * If an instance of struct search corresponds to a regular character, then that
+ * character is stored in @a c and @a n is equal to 1.  If an instance of struct
+ * search corresponds to a run of control characters, then a space character ' '
+ * is stored in @a c and @a n is equal to to the length of the run.  If an instance
+ * of struct search corresponds to the end of a line, then a space is stored in
+ * @a c and @a n is equal to 0.
+ */
 struct search {
-	int x, y;
-	signed int n;		/* RAM is cheap nowadays */
-	unicode_val_T c;
+	int x, y;               /* Co-ordinates on the document canvas,
+	                         * document.data. */
+
+	signed int n;           /* The number of characters on the
+	                         * document canvas to which this object
+	                         * corresponds.  If the value is 0, then this
+	                         * object marks the end of a line.  If the value
+	                         * is 1, then this object corresponds to a
+	                         * single character.  If the value is greater
+	                         * than 1, then this object corresponds to a run
+	                         * of control characters. */
+
+	unicode_val_T c;        /* The character on the document canvas to which
+	                         * this object corresponds or ' ' if that
+	                         * character is a control character or if this
+	                         * object marks the end of a line. */
+
+	/* RAM is cheap nowadays */
 };
 #else
 struct search {
@@ -182,6 +213,9 @@ struct document {
 
 	struct uri *uri;
 
+	/* for obtaining IP */
+	void *querydns;
+	unsigned char *ip;
 	/** The title of the document.  The charset of this string is
 	 * document.options.cp.  */
 	unsigned char *title;
@@ -208,13 +242,24 @@ struct document {
 	unsigned char buf[7];
 	unsigned char buf_length;
 #endif
+#ifdef CONFIG_COMBINE
+	/* base char + 5 combining chars = 6 */
+	unicode_val_T combi[UCS_MAX_LENGTH_COMBINED];
+	/* the number of combining characters. The base char is not counted. */
+	unsigned int combi_length;
+	/* Positions of the last base character.*/
+	int comb_x, comb_y;
+#endif
 	unsigned int cache_id; /**< Used to check cache entries. */
 
 	int cp;
 	int width, height; /**< size of document */
 	int nlinks;
 	int nsearch;
-	color_T bgcolor;
+
+	struct {
+		color_T background;
+	} color;
 
 	enum cp_status cp_status;
 	unsigned int links_sorted:1; /**< whether links are already sorted */
@@ -239,7 +284,7 @@ void done_link_members(struct link *link);
  * validity of formatted documents in the cache. */
 unsigned long get_document_css_magic(struct document *document);
 
-void update_cached_document_options(void);
+void update_cached_document_options(struct session *ses);
 
 struct document *get_cached_document(struct cache_entry *cached, struct document_options *options);
 

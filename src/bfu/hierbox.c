@@ -30,7 +30,7 @@ update_hierbox_browser(struct hierbox_browser *browser)
 	struct hierbox_dialog_list_item *item;
 
 	foreach (item, browser->dialogs) {
-		redraw_from_window(item->dlg_data->win->next);
+		redraw_windows(REDRAW_WINDOW_AND_FRONT, item->dlg_data->win);
 	}
 }
 
@@ -109,7 +109,7 @@ done_listbox_item(struct hierbox_browser *browser, struct listbox_item *item)
 
 		del_from_list(item);
 
-		update_hierbox_browser(browser);
+		if (item->visible) update_hierbox_browser(browser);
 	}
 
 	mem_free(item);
@@ -661,7 +661,7 @@ do_delete_item(struct listbox_item *item, struct listbox_context *info,
 		return;
 	}
 
-	ops->delete(item, last);
+	ops->delete_(item, last);
 }
 
 static int
@@ -723,14 +723,14 @@ query_delete_selected_item(void *context_)
 	const struct listbox_ops *ops = box->ops;
 	struct listbox_item *item = box->sel;
 	unsigned char *text;
-	enum delete_error delete;
+	enum delete_error delete_;
 
 	assert(item);
 
-	delete = ops->can_delete(item) ? DELETE_LOCKED : DELETE_IMPOSSIBLE;
+	delete_ = ops->can_delete(item) ? DELETE_LOCKED : DELETE_IMPOSSIBLE;
 
-	if (delete == DELETE_IMPOSSIBLE || ops->is_used(item)) {
-		print_delete_error(item, term, ops, delete);
+	if (delete_ == DELETE_IMPOSSIBLE || ops->is_used(item)) {
+		print_delete_error(item, term, ops, delete_);
 		return EVENT_PROCESSED;
 	}
 
@@ -791,7 +791,7 @@ push_hierbox_delete_button(struct dialog_data *dlg_data,
 
 	if (!item) return EVENT_PROCESSED;
 
-	assert(ops && ops->can_delete && ops->delete);
+	assert(ops && ops->can_delete && ops->delete_);
 
 	context = init_listbox_context(box, term, item, scan_for_marks);
 	if (!context) return EVENT_PROCESSED;
@@ -939,7 +939,8 @@ search_hierbox_browser(void *data, unsigned char *text)
 				    scan_for_matches, context);
 
 	if (!context->item && *text) {
-		switch (get_opt_int("document.browse.search.show_not_found")) {
+		switch (get_opt_int("document.browse.search.show_not_found",
+		                    NULL)) {
 		case 2:
 			info_box(term, MSGBOX_FREE_TEXT,
 				 N_("Search"), ALIGN_CENTER,

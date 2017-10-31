@@ -232,7 +232,7 @@ get_mailcap_field(unsigned char **next)
 		if (*fieldend == ';')
 			fieldend++;
 
-		fieldend = strchr(fieldend, ';');
+		fieldend = strchr((const char *)fieldend, ';');
 	} while (fieldend && *(fieldend-1) == '\\');
 
 	if (fieldend) {
@@ -301,6 +301,7 @@ parse_optional_fields(struct mailcap_entry *entry, unsigned char *line)
 			for (field = entry->testcommand; *field; field++)
 				if (*field == '%' && *(field+1) == 's') {
 					mem_free(entry->testcommand);
+					entry->testcommand = NULL;
 					return 0;
 				}
 
@@ -359,7 +360,7 @@ parse_mailcap_file(unsigned char *filename, unsigned int priority)
 			continue;
 		}
 
-		basetypeend = strchr(type, '/');
+		basetypeend = strchr((const char *)type, '/');
 		typelen = strlen(type);
 
 		if (!basetypeend) {
@@ -552,24 +553,6 @@ format_command(unsigned char *command, unsigned char *type, int copiousoutput)
 			break;
 		}
 	}
-
-	if (copiousoutput) {
-		unsigned char *pager = getenv("PAGER");
-
-		if (!pager && file_exists(DEFAULT_PAGER_PATH)) {
-			pager = DEFAULT_PAGER_PATH;
-		} else if (!pager && file_exists(DEFAULT_LESS_PATH)) {
-			pager = DEFAULT_LESS_PATH;
-		} else if (!pager && file_exists(DEFAULT_MORE_PATH)) {
-			pager = DEFAULT_MORE_PATH;
-		}
-
-		if (pager) {
-			add_char_to_string(&cmd, '|');
-			add_to_string(&cmd, pager);
-		}
-	}
-
 	return cmd.source;
 }
 
@@ -627,7 +610,7 @@ get_mailcap_entry(unsigned char *type)
 		/* The type lookup has either failed or we need to check
 		 * the priorities so get the wild card handler */
 		struct mailcap_entry *wildcard = NULL;
-		unsigned char *wildpos = strchr(type, '/');
+		unsigned char *wildpos = strchr((const char *)type, '/');
 
 		if (wildpos) {
 			int wildlen = wildpos - type + 1; /* include '/' */
@@ -653,8 +636,101 @@ get_mailcap_entry(unsigned char *type)
 	return entry;
 }
 
+#if defined(HAVE_SETENV) || defined(HAVE_PUTENV)
+/** Set or unset the DISPLAY environment variable before a mailcap
+ * check, or restore it afterwards.
+ *
+ * In a mailcap file, each entry can specify a test command that
+ * checks whether the entry is applicable to the user's environment.
+ * For example:
+ *
+ * @verbatim
+ * audio/mpegurl; xmms %s; test=test "$DISPLAY" != ""
+ * @endverbatim
+ *
+ * This means the entry should be used only if the DISPLAY environment
+ * variable is not empty, i.e. there is an X display.  In ELinks,
+ * check_entries() runs these test commands, so they inherit the
+ * environment variables of the master ELinks process.  However, if
+ * the user is running ELinks on multiple terminals, then each slave
+ * ELinks process has its own environment variables, which may or may
+ * not include DISPLAY.  Because the actual mailcap command may be run
+ * from a slave ELinks process and inherit the environment from it,
+ * any test command should also be run in the same environment.
+ *
+ * This function does not fully implement the ideal described above.
+ * Instead, it only sets the DISPLAY environment variable as ":0" if
+ * the terminal has any X display at all, or unsets DISPLAY if not.
+ * This should be enough for most test commands seen in practice.
+ * After the test commands of mailcap entries have been run, this
+ * function must be called again to restore DISPLAY.
+ *
+ * @todo Retrieve all environment variables from the slave process and
+ *   propagate them to the test commands.  Actually, it might be best
+ *   to fork the test commands from the slave process, so that they
+ *   would also inherit the controlling tty.  However, that would
+ *   require changing the interlink protocol and might risk deadlocks
+ *   or memory leaks if a slave terminates without responding.
+ *
+ * @param xwin
+ *   Whether the terminal has an associated X display.
+ * @param restore
+ *   If this is 0, the function sets or clears DISPLAY, as described above.
+ *   If this is 1, the function restores the original value of DISPLAY.
+ *   There is only room for one saved value; do not nest calls.  */
+static void
+set_display(int xwin, int restore)
+{
+	static unsigned char *display = NULL;
+
+	if (!restore) {
+		assert(display == NULL);
+		if_assert_failed mem_free(display);
+
+		display = getenv("DISPLAY");
+		if (display) display = stracpy(display);
+		if (xwin) {
+#ifdef HAVE_SETENV
+			setenv("DISPLAY", ":0", 1);
+#else
+			putenv("DISPLAY=:0");
+#endif
+		} else {
+#ifdef HAVE_UNSETENV
+			unsetenv("DISPLAY");
+#else
+			putenv("DISPLAY");
+#endif
+		}
+	} else { /* restore DISPLAY */
+		if (display) {
+#ifdef HAVE_SETENV
+			setenv("DISPLAY", display, 1);
+#else
+			{
+				static unsigned char DISPLAY[1024] = "DISPLAY=";
+
+				/* DISPLAY[1023] == '\0' and we don't let
+				 * strncpy write that far, so putenv always
+				 * gets a null-terminated string.  */
+				strncpy(DISPLAY + 8, display, 1023 - 8);
+				putenv(DISPLAY);
+			}
+#endif
+			mem_free_set(&display, NULL);
+		} else {
+#ifdef HAVE_UNSETENV
+			unsetenv("DISPLAY");
+#else
+			putenv("DISPLAY");
+#endif
+		}
+	}
+}
+#endif
+
 static struct mime_handler *
-get_mime_handler_mailcap(unsigned char *type, int options)
+get_mime_handler_mailcap(unsigned char *type, int xwin)
 {
 	struct mailcap_entry *entry;
 	struct mime_handler *handler;
@@ -665,7 +741,14 @@ get_mime_handler_mailcap(unsigned char *type, int options)
 	    || (!mailcap_map && !init_mailcap_map()))
 		return NULL;
 
+#if defined(HAVE_SETENV) || defined(HAVE_PUTENV)
+	set_display(xwin, 0);
+#endif
 	entry = get_mailcap_entry(type);
+
+#if defined(HAVE_SETENV) || defined(HAVE_PUTENV)
+	set_display(xwin, 1);
+#endif
 	if (!entry) return NULL;
 
 	program = format_command(entry->command, type, entry->copiousoutput);
@@ -677,6 +760,7 @@ get_mime_handler_mailcap(unsigned char *type, int options)
 				    get_mailcap_ask(), block);
 	mem_free(program);
 
+	handler->copiousoutput = entry->copiousoutput;
 	return handler;
 }
 
@@ -740,16 +824,16 @@ main(int argc, char *argv[])
 			handler = get_mime_handler_mailcap(arg, 0);
 			if (!handler) continue;
 
-			if (strstr(format, "description"))
+			if (strstr((const char *)format, "description"))
 				printf("description: %s\n", handler->description);
 
-			if (strstr(format, "ask"))
+			if (strstr((const char *)format, "ask"))
 				printf("ask: %d\n", handler->ask);
 
-			if (strstr(format, "block"))
+			if (strstr((const char *)format, "block"))
 				printf("block: %d\n", handler->block);
 
-			if (strstr(format, "program"))
+			if (strstr((const char *)format, "program"))
 				printf("program: %s\n", handler->program);
 
 		} else {

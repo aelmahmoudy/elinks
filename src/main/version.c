@@ -70,7 +70,7 @@ wrap_string(struct string *string, int start_at, int maxlen)
 	if (maxlen <= 0) return;
 
 	pos = start_pos = &string->source[start_at];
-	while ((pos = strchr(pos, ' '))) {
+	while ((pos = strchr((const char *)pos, ' '))) {
 		int len = pos - start_pos;
 
 		if (len < maxlen) {
@@ -143,6 +143,9 @@ get_dyn_full_version(struct terminal *term, int more)
 #ifdef CONFIG_UTF8
 		comma, "UTF-8",
 #endif
+#ifdef CONFIG_COMBINE
+		comma, _("Combining characters", term),
+#endif
 		comma,
 		(unsigned char *) NULL
 	);
@@ -151,7 +154,7 @@ get_dyn_full_version(struct terminal *term, int more)
 
 	if (!more) {
 		int start_at = 0;
-		unsigned char *last_newline = strrchr(string.source, '\n');
+		unsigned char *last_newline = strrchr((const char *)string.source, '\n');
 
 		if (last_newline) {
 			start_at = last_newline - string.source + 1;

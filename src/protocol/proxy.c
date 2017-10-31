@@ -27,17 +27,17 @@
 static int
 proxy_probe_no_proxy(unsigned char *url, unsigned char *no_proxy)
 {
-	unsigned char *slash = strchr(url, '/');
+	unsigned char *slash = strchr((const char *)url, '/');
 
 	if (slash) *slash = '\0';
 
 	while (no_proxy && *no_proxy) {
-		unsigned char *jumper = strchr(no_proxy, ',');
+		unsigned char *jumper = strchr((const char *)no_proxy, ',');
 
 		skip_space(no_proxy);
 		if (jumper) *jumper = '\0';
 
-		if (c_strcasestr(url, no_proxy)) {
+		if (c_strcasestr((const char *)url, (const char *)no_proxy)) {
 			if (jumper) *jumper = ',';
 			if (slash) *slash = '/';
 			return 1;
@@ -105,7 +105,7 @@ get_protocol_proxy(unsigned char *opt,
 {
 	unsigned char *proxy;
 
-	proxy = get_opt_str(opt);
+	proxy = get_opt_str(opt, NULL);
 	if (!*proxy) proxy = getenv(env1);
 	if (!proxy || !*proxy) proxy = getenv(env2);
 
@@ -168,11 +168,11 @@ get_proxy_worker(struct uri *uri, unsigned char *proxy,
 
 	if (protocol_proxy && *protocol_proxy) {
 		unsigned char *no_proxy;
-		unsigned char *slash = strchr(protocol_proxy, '/');
+		unsigned char *slash = strchr((const char *)protocol_proxy, '/');
 
 		if (slash) *slash = 0;
 
-		no_proxy = get_opt_str("protocol.no_proxy");
+		no_proxy = get_opt_str("protocol.no_proxy", NULL);
 		if (!*no_proxy) no_proxy = getenv("NO_PROXY");
 		if (!no_proxy || !*no_proxy) no_proxy = getenv("no_proxy");
 

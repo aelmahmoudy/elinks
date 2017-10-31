@@ -5,8 +5,104 @@ You can see the complete list of recent changes, bugfixes and new features
 in the http://repo.or.cz/w/elinks.git[gitweb interface]. See the ChangeLog
 file for details.
 
+ELinks 0.13.GIT now:
+--------------------
+
+To be released as ELinks 0.13.0.
+
+Incompatibilities:
+
+* The protocol.fsp.sort option has been removed.  ELinks always sorts.
+* bug 1024: Verify the host name or IP address in the server certificate
+  if connection.ssl.cert_verify is not 0.
+
+Regressions:
+
+* ELinks 0.13.GIT does not yet include the fix for bug 1083, listed
+  below for ELinks 0.12pre6.
+
+Miscellaneous:
+
+* major bug 181: Slave ELinks processes can now run an external editor.
+  This used to work in the master process only.
+* major bug 722: Filter CSS according to media types.  New option
+  document.css.media.
+* bug 638: Propagate the existence of $DISPLAY from slave terminals to
+  mailcap test commands.
+* bugs 762, 1082: Small memory leak in goto_current_link/goto_imgmap
+* bug 963: New option document.css.ignore_display_none.
+* bug 977: Fixed crash when opening in new tab a non link with onclick
+  attribute.
+* bug 1008: File upload fields in HTML forms now stream the files to
+  the server, instead of reading them to memory in advance.  This lets
+  you upload larger files.  The downsides are that ELinks may use a
+  cached response even if you have modified a file between requests,
+  and that ELinks can send inconsistent data if you modify a file
+  while it is being uploaded.
+* bug 1054: Don't abort downloads when closing the terminal from which
+  they were started.  When such a download ends, display the message
+  in the most recently used terminal.  If the user chooses
+  ``Background and Notify'' via the download manager in some terminal,
+  reassociate the download with that terminal.  These changes do not
+  apply to downloads to external handlers.
+* Really retry forever when connection.retries = 0.
+* enhancement: Session-specific options.  Any options changed with
+  toggle-* actions no longer affect other tabs or other terminals.
+* Do not crash when document.browse.minimum_refresh_time = 0 and
+  a document has a meta refresh with a delay of 0.
+* Properly update link highlighting and status bar information when the
+  repeat prefix is changed.
+* enhancement 15: Domain-specific options.  Use set_domain in
+  elinks.conf to e.g. disable cookies for google.com.  The option
+  manager window does not yet support this.
+* enhancement 867: Use bracketed paste mode on xterm.  This requires
+  xterm patch #228 or later configured with --enable-readline-mouse.
+* enhancement 824: Experimental support for combining characters.
+  See features.conf for details.
+* enhancement: Add a new entry Link Info under Link main menu.
+* enhancement: Indicate backgrounded downloads using an unused led.
+* enhancement: Display the number of ECMAScript interpreters that have
+  been allocated for documents in the Resources dialog.
+* Fedora enhancement 346861: Add support for nss_compat_ossl library
+  (OpenSSL replacement).
+* enhancement: ``elinks --dump'' uses box-drawing characters if supported
+  by the charset.
+* enhancement 1070: Support 256 colors on fbterm-1.4.
+* enhancement 1075: Scrolling the entire contents of dialog boxes.
+  Especially useful for multi-file BitTorrent downloads.
+* Report if the Lua function edit_bookmark_dialog receives the wrong
+  number or types of arguments instead of silently failing.
+* enhancement: Add ``Invalidate'' button to the cache manager.
+* enhancement: Add ``Search contents'' button to the cache manager with
+  which one can search through the cache items' data rather than their
+  metadata.
+* enhancement: Add rudimentary support for the HTML5 media elements,
+  <video> and <audio>.
+* enhancement: Add move-half-page-up and move-half-page-down actions.
+* enhancement: Add option to change overlap for vertical scrolling.
+* enhancement: HTML meta refresh allows semicolons in URLs, and the
+  syntax is more like in Firefox.
+* link against lua51 not lua50
+* SpiderMonkey must be 1.8.5 or later.  Find it with pkg-config.
+* using iconv for some multibyte charsets. It works if the terminal codepage
+  is UTF-8. More charsets will be added on demand.
+
+//////////////////////////////////////////////////////////////////////
+The following changes should be removed from NEWS before ELinks 0.13.0
+is released.  They are currently listed here just to show that they
+have already been considered.
+
+* Fixed bugs that were not in previous versions:
+  - blocker bug 1123: segfault on https with openssl + cert_verify=1
+    (caused by the bug 1024 fix, which was not applied to elinks-0.12)
+  - critical bug 1009: assertion failure in add_snippets()
+    (mostly reverted)
+//////////////////////////////////////////////////////////////////////
+
 ELinks 0.12pre6
 ---------------
+
+Released on 2012-10-30.
 
 Security fix:
 

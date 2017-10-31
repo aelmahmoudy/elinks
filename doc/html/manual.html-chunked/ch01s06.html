@@ -9,7 +9,7 @@ documentation; is not actively developed; and generally looks broken and
 extremely clumsy to work with. So we instead went the way of the SpiderMonkey
 (SM) engine (property of Mozilla), which is hard to install, bigger (mind you,
 it comes from Mozilla ;), has ugly naming scheme but nice calling conventions,
-acceptable documentation, is actively developed and ought to work.</p><div class="section" title="Ok, so how to get the ECMAScript support working?"><div class="titlepage"><div><div><h3 class="title"><a name="idp4110784"></a>Ok, so how to get the ECMAScript support working?</h3></div></div></div><p>Some systems come with either the SpiderMonkey installed or as an option. It
+acceptable documentation, is actively developed and ought to work.</p><div class="section" title="Ok, so how to get the ECMAScript support working?"><div class="titlepage"><div><div><h3 class="title"><a name="idp5200096"></a>Ok, so how to get the ECMAScript support working?</h3></div></div></div><p>Some systems come with either the SpiderMonkey installed or as an option. It
 would be good to test if you can take the easy path and let the system take
 care of installation through a package system. Below are listed instructions
 on what package you need to install on various systems (please help improve
@@ -40,12 +40,12 @@ see you on #elinks @ FreeNode or in the mailing list.
 You may add your options to <code class="literal">./configure</code> as usual; SpiderMonkey should be
 autodetected.</p><pre class="literallayout">$ cd ../..
 $ ./configure</pre><p>Check for the following line in the features summary:</p><pre class="literallayout">ECMAScript (JavaScript) ......... SpiderMonkey document scripting</pre><p>Then run:</p><pre class="literallayout">$ make
-$ su -c 'make install'</pre><p>Enjoy.</p></div><div class="section" title="The ECMAScript support is buggy! Shall I blame Mozilla people?"><div class="titlepage"><div><div><h3 class="title"><a name="idp3601968"></a>The ECMAScript support is buggy! Shall I blame Mozilla people?</h3></div></div></div><p>Likely not. The ECMAScript engine provides only the language compiler and some
+$ su -c 'make install'</pre><p>Enjoy.</p></div><div class="section" title="The ECMAScript support is buggy! Shall I blame Mozilla people?"><div class="titlepage"><div><div><h3 class="title"><a name="idp5227744"></a>The ECMAScript support is buggy! Shall I blame Mozilla people?</h3></div></div></div><p>Likely not. The ECMAScript engine provides only the language compiler and some
 basic built-in objects, and it's more than likely that the problem is on our
 side in the implementation of some of the HTML/DOM objects (perhaps we just
 haven't bothered to implement it at all yet). So better tell us first, and if
 we think it's not our fault we will tell you to go complain to Mozilla (better
-yet if it does not work in the Mozilla browsers neither ;-).</p></div><div class="section" title="Now, I would still like NJS or a new JS engine from scratch…"><div class="titlepage"><div><div><h3 class="title"><a name="idp3275936"></a>Now, I would still like NJS or a new JS engine from scratch…</h3></div></div></div><p>...and you don't fear some coding? That's fine then! ELinks is in no way tied
+yet if it does not work in the Mozilla browsers neither ;-).</p></div><div class="section" title="Now, I would still like NJS or a new JS engine from scratch…"><div class="titlepage"><div><div><h3 class="title"><a name="idp5229776"></a>Now, I would still like NJS or a new JS engine from scratch…</h3></div></div></div><p>...and you don't fear some coding? That's fine then! ELinks is in no way tied
 to SpiderMonkey, in fact the ECMAScript support was carefully implemented so
 that there are no SpiderMonkey references outside of
 <code class="literal">src/ecmascript/spidermonkey.*</code>. If you want to implement an alternative

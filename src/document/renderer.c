@@ -1,4 +1,4 @@
-/** HTML renderer
+/** Generic renderer multiplexer
  * @file */
 
 #ifdef HAVE_CONFIG_H
@@ -18,6 +18,7 @@
 #include "document/dom/renderer.h"
 #include "document/html/frames.h"
 #include "document/html/renderer.h"
+#include "document/libdom/renderer.h"
 #include "document/plain/renderer.h"
 #include "document/renderer.h"
 #include "document/view.h"
@@ -63,7 +64,8 @@ add_snippets(struct ecmascript_interpreter *interpreter,
 		unset_led_value(interpreter->vs->doc_view->session->status.ecmascript_led);
 #endif
 
-	if (list_empty(*doc_snippets) || !get_opt_bool("ecmascript.enable"))
+	if (list_empty(*doc_snippets)
+	    || !get_opt_bool("ecmascript.enable", NULL))
 		return;
 
 	/* We do this all only once per view_state now. */
@@ -228,18 +230,33 @@ render_encoded_document(struct cache_entry *cached, struct document *document)
 		if (encoding != ENCODING_NONE) {
 			int length = 0;
 			unsigned char *source;
+			struct stream_encoded *stream = open_encoded(-1, encoding);
 
-			source = decode_encoded_buffer(encoding, buffer.source,
-					       buffer.length, &length);
-			if (source) {
-				buffer.source = source;
-				buffer.length = length;
-			} else {
+			if (!stream) {
 				encoding = ENCODING_NONE;
+			} else {
+				source = decode_encoded_buffer(stream, encoding, buffer.source,
+					       buffer.length, &length);
+				close_encoded(stream);
+
+				if (source) {
+					buffer.source = source;
+					buffer.length = length;
+				} else {
+					encoding = ENCODING_NONE;
+				}
 			}
 		}
 	}
 
+#ifdef CONFIG_LIBDOM
+	if (document->options.plain && cached->content_type
+	    && (!c_strcasecmp("text/html", cached->content_type)
+	    || !c_strcasecmp("application/xhtml+xml", cached->content_type))) {
+		render_source_document(cached, document, &buffer);
+	}
+	else
+#endif
 	if (document->options.plain) {
 #ifdef CONFIG_DOM
 		if (cached->content_type
@@ -442,7 +459,7 @@ render_document_frames(struct session *ses, int no_cache)
 
 	if (have_location(ses)) vs = &cur_loc(ses)->vs;
 
-	init_document_options(&doc_opts);
+	init_document_options(ses, &doc_opts);
 
 	set_box(&doc_opts.box, 0, 0,
 		ses->tab->term->width, ses->tab->term->height);
@@ -457,8 +474,9 @@ render_document_frames(struct session *ses, int no_cache)
 		if (ses->status.show_tabs_bar_at_top) doc_opts.box.y++;
 	}
 
-	doc_opts.color_mode = get_opt_int_tree(ses->tab->term->spec, "colors");
-	if (!get_opt_bool_tree(ses->tab->term->spec, "underline"))
+	doc_opts.color_mode = get_opt_int_tree(ses->tab->term->spec, "colors",
+	                                       NULL);
+	if (!get_opt_bool_tree(ses->tab->term->spec, "underline", NULL))
 		doc_opts.color_flags |= COLOR_ENHANCE_UNDERLINE;
 
 	doc_opts.cp = get_terminal_codepage(ses->tab->term);
@@ -600,7 +618,7 @@ get_convert_table(unsigned char *head, int to_cp,
 
 		if (!a) break;
 
-		parse_header_param(a, "charset", &ct_charset);
+		parse_header_param(a, "charset", &ct_charset, 0);
 		if (ct_charset) {
 			cp_index = get_cp_index(ct_charset);
 			mem_free(ct_charset);

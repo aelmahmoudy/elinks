@@ -220,14 +220,14 @@ uint32_t
 get_bittorrent_peerwire_max_message_length(void)
 {
 	return get_opt_int_tree(&bittorrent_protocol_options[0].option,
-				"peerwire.max_message_length");
+				"peerwire.max_message_length", NULL);
 }
 
 uint32_t
 get_bittorrent_peerwire_max_request_length(void)
 {
 	return get_opt_int_tree(&bittorrent_protocol_options[0].option,
-				"peerwire.max_request_length");
+				"peerwire.max_request_length", NULL);
 }
 
 
@@ -281,7 +281,7 @@ add_bittorrent_selection(struct uri *uri, int *selection, size_t size)
 	int *duplicate;
 
 	duplicate = get_bittorrent_selection(uri, size);
-	if (duplicate) mem_free(duplicate);
+	mem_free_if(duplicate);
 
 	info = mem_calloc(1, sizeof(*info));
 	if (!info) return;
@@ -299,7 +299,7 @@ static INIT_LIST_OF(struct bittorrent_message, bittorrent_messages);
 
 void
 add_bittorrent_message(struct uri *uri, struct connection_state state,
-		       struct string *string)
+		       struct bittorrent_const_string *string)
 {
 	struct bittorrent_message *message;
 	int length = string ? string->length : 0;

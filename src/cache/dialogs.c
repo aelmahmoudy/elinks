@@ -123,9 +123,27 @@ get_cache_entry_info(struct listbox_item *item, struct terminal *term)
 		time_t expires = timeval_to_seconds(&cached->max_age);
 
 		add_format_to_string(&msg, "\n%s: ", _("Expires", term));
-		add_date_to_string(&msg, get_opt_str("ui.date_format"), &expires);
+		add_date_to_string(&msg, get_opt_str("ui.date_format", NULL), &expires);
 	}
 #endif
+
+	add_format_to_string(&msg, "\n%s: ", _("Cache mode", term));
+	switch (cached->cache_mode) {
+	case CACHE_MODE_NEVER:
+		add_to_string(&msg, _("never use cache entry", term));
+		break;
+	case CACHE_MODE_ALWAYS:
+		add_to_string(&msg, _("always use cache entry", term));
+		break;
+	case CACHE_MODE_INCREMENT:
+	case CACHE_MODE_NORMAL:
+	case CACHE_MODE_CHECK_IF_MODIFIED:
+	case CACHE_MODE_FORCE_RELOAD:
+		/* Cache entries only use two values of enum cache_mode. */
+		INTERNAL("cached->cache_mode = %d", cached->cache_mode);
+		break;
+	}
+
 #ifdef CONFIG_DEBUG
 	add_format_to_string(&msg, "\n%s: %d", "Refcount", get_object_refcount(cached));
 	add_format_to_string(&msg, "\n%s: %u", _("ID", term), cached->cache_id);
@@ -175,8 +193,21 @@ match_cache_entry(struct listbox_item *item, struct terminal *term,
 {
 	struct cache_entry *cached = item->udata;
 
-	if (c_strcasestr(struri(cached->uri), text)
-	    || (cached->head && c_strcasestr(cached->head, text)))
+	if (c_strcasestr((const char *)struri(cached->uri), (const char *)text)
+	    || (cached->head && c_strcasestr((const char *)cached->head, (const char *)text)))
+		return LISTBOX_MATCH_OK;
+
+	return LISTBOX_MATCH_NO;
+}
+
+static enum listbox_match
+match_cache_entry_contents(struct listbox_item *item, struct terminal *term,
+		  unsigned char *text)
+{
+	struct cache_entry *cached = item->udata;
+	struct fragment *fragment = get_cache_fragment(cached);
+
+	if (fragment && strlcasestr(fragment->data, fragment->length, text, -1))
 		return LISTBOX_MATCH_OK;
 
 	return LISTBOX_MATCH_NO;
@@ -209,27 +240,85 @@ static struct listbox_ops_messages cache_messages = {
 	NULL,
 };
 
-static const struct listbox_ops cache_entry_listbox_ops = {
-	lock_cache_entry,
-	unlock_cache_entry,
-	is_cache_entry_used,
-	get_cache_entry_text,
-	get_cache_entry_info,
-	get_cache_entry_uri,
-	get_cache_entry_root,
-	match_cache_entry,
-	can_delete_cache_entry,
-	delete_cache_entry_item,
-	NULL,
+#define ops(matchfn)             \
+	lock_cache_entry,        \
+	unlock_cache_entry,      \
+	is_cache_entry_used,     \
+	get_cache_entry_text,    \
+	get_cache_entry_info,    \
+	get_cache_entry_uri,     \
+	get_cache_entry_root,    \
+	matchfn,                 \
+	can_delete_cache_entry,  \
+	delete_cache_entry_item, \
+	NULL,                    \
 	&cache_messages,
+
+/* Each hierbox window is represented by an instance of struct hierbox,
+ * which has a corresponding instance of struct listbox_data.  That
+ * instance of struct listbox_data will point one of the following two
+ * struct listbox_ops instances depending on which type of search the
+ * user is performing in that hierbox.  The two struct listbox_ops
+ * instances differ only in the match callback. */
+
+const static struct listbox_ops cache_entry_listbox_ops_match_contents = {
+	ops(match_cache_entry_contents)
 };
+
+const static struct listbox_ops cache_entry_listbox_ops = {
+	ops(match_cache_entry)
+};
+
+#undef ops
+
+static widget_handler_status_T
+push_cache_hierbox_search_button(struct dialog_data *dlg_data, struct widget_data *button)
+{
+	struct listbox_data *box = get_dlg_listbox_data(dlg_data);
+
+	box->ops = &cache_entry_listbox_ops;
+
+	return push_hierbox_search_button(dlg_data, button);
+}
+
+static widget_handler_status_T
+push_cache_hierbox_search_contents_button(struct dialog_data *dlg_data, struct widget_data *button)
+{
+	struct listbox_data *box = get_dlg_listbox_data(dlg_data);
+
+	box->ops = &cache_entry_listbox_ops_match_contents;
+
+	return push_hierbox_search_button(dlg_data, button);
+}
+
+
+static widget_handler_status_T
+push_invalidate_button(struct dialog_data *dlg_data, struct widget_data *button)
+{
+	struct terminal *term = dlg_data->win->term;
+	struct listbox_data *box = get_dlg_listbox_data(dlg_data);
+	struct cache_entry *cached = box->sel->udata;
+
+	if (!box->sel || !box->sel->udata) return EVENT_PROCESSED;
+
+	assert(box->sel->type == BI_LEAF);
+
+	cached->valid = 0;
+
+	info_box(term, 0, N_("Cache entry invalidated"), ALIGN_CENTER,
+		 N_("Cache entry invalidated."));
+
+	return EVENT_PROCESSED;
+}
 
 static const struct hierbox_browser_button cache_buttons[] = {
 	/* [gettext_accelerator_context(.cache_buttons)] */
 	{ N_("~Info"),   push_hierbox_info_button,   1 },
 	{ N_("~Goto"),   push_hierbox_goto_button,   1 },
 	{ N_("~Delete"), push_hierbox_delete_button, 1 },
-	{ N_("~Search"), push_hierbox_search_button, 1 },
+	{ N_("~Search"), push_cache_hierbox_search_button, 1 },
+	{ N_("Search c~ontents"), push_cache_hierbox_search_contents_button, 1 },
+	{ N_("In~validate"), push_invalidate_button, 1 },
 };
 
 struct_hierbox_browser(

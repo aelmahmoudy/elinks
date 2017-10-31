@@ -44,7 +44,6 @@
 #include "viewer/text/search.h"
 #include "viewer/text/view.h"
 
-
 static void
 goto_url_action(struct session *ses,
 		unsigned char *(*get_url)(struct session *, unsigned char *, size_t))
@@ -131,17 +130,8 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 
 			if (!ses->kbdprefix.repeat_count) break;
 
-			/* Clear the highlighting. */
-			draw_formatted(ses, 0);
-
-			ses->kbdprefix.repeat_count /= 10;
-
-			if (ses->kbdprefix.repeat_count)
-				highlight_links_with_prefixes_that_start_with_n(
-			                           term, doc_view,
-			                           ses->kbdprefix.repeat_count);
-
-			print_screen_status(ses);
+			set_kbd_repeat_count(ses,
+			                     ses->kbdprefix.repeat_count / 10);
 
 			/* Keep send_event from resetting repeat_count. */
 			status = FRAME_EVENT_SESSION_DESTROYED;
@@ -164,7 +154,7 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 
 		case ACT_MAIN_COOKIES_LOAD:
 #ifdef CONFIG_COOKIES
-			if (!get_opt_bool("cookies.save")) break;
+			if (!get_opt_bool("cookies.save", NULL)) break;
 			load_cookies();
 #endif
 			break;
@@ -286,6 +276,10 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 			abort_background_connections();
 			break;
 
+		case ACT_MAIN_LINK_DIALOG:
+			open_link_dialog(ses);
+			break;
+
 		case ACT_MAIN_LINK_DOWNLOAD:
 		case ACT_MAIN_LINK_DOWNLOAD_IMAGE:
 		case ACT_MAIN_LINK_DOWNLOAD_RESUME:
@@ -305,6 +299,10 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 			status = enter(ses, doc_view, 1);
 			break;
 
+		case ACT_MAIN_LINK_INFO:
+			link_info_dialog(ses);
+			break;
+			
 		case ACT_MAIN_LINK_MENU:
 			link_menu(term, NULL, ses);
 			break;
@@ -340,6 +338,10 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 			activate_bfu_technology(ses, -1);
 			break;
 
+		case ACT_MAIN_MOVE_CURRENT_TOP:
+			status = move_current_top(ses, doc_view);
+			break;
+
 		case ACT_MAIN_MOVE_CURSOR_UP:
 			status = move_cursor_up(ses, doc_view);
 			break;
@@ -358,6 +360,14 @@ do_action(struct session *ses, enum main_action action_id, int verbose)
 
 		case ACT_MAIN_MOVE_CURSOR_LINE_START:
 			status = move_cursor_line_start(ses, doc_view);
+			break;
+
+		case ACT_MAIN_MOVE_HALF_PAGE_DOWN:
+			status = move_half_page_down(ses, doc_view);
+			break;
+
+		case ACT_MAIN_MOVE_HALF_PAGE_UP:
+			status = move_half_page_up(ses, doc_view);
 			break;
 
 		case ACT_MAIN_MOVE_LINK_DOWN:

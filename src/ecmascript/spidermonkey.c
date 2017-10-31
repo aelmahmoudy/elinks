@@ -14,6 +14,7 @@
 
 #include "bfu/dialog.h"
 #include "cache/cache.h"
+#include "config/options.h"
 #include "cookies/cookies.h"
 #include "dialogs/menu.h"
 #include "dialogs/status.h"
@@ -25,6 +26,7 @@
 #include "ecmascript/spidermonkey.h"
 #include "ecmascript/spidermonkey/document.h"
 #include "ecmascript/spidermonkey/form.h"
+#include "ecmascript/spidermonkey/heartbeat.h"
 #include "ecmascript/spidermonkey/location.h"
 #include "ecmascript/spidermonkey/navigator.h"
 #include "ecmascript/spidermonkey/unibar.h"
@@ -61,22 +63,22 @@ static void
 error_reporter(JSContext *ctx, const char *message, JSErrorReport *report)
 {
 	struct ecmascript_interpreter *interpreter = JS_GetContextPrivate(ctx);
+	struct session *ses = interpreter->vs->doc_view->session;
 	struct terminal *term;
 	unsigned char *strict, *exception, *warning, *error;
 	struct string msg;
 
 	assert(interpreter && interpreter->vs && interpreter->vs->doc_view
-	       && interpreter->vs->doc_view->session
-	       && interpreter->vs->doc_view->session->tab);
+	       && ses && ses->tab);
 	if_assert_failed goto reported;
 
-	term = interpreter->vs->doc_view->session->tab->term;
+	term = ses->tab->term;
 
 #ifdef CONFIG_LEDS
-	set_led_value(interpreter->vs->doc_view->session->status.ecmascript_led, 'J');
+	set_led_value(ses->status.ecmascript_led, 'J');
 #endif
 
-	if (!get_opt_bool("ecmascript.error_reporting")
+	if (!get_opt_bool("ecmascript.error_reporting", ses)
 	    || !init_string(&msg))
 		goto reported;
 
@@ -109,14 +111,16 @@ reported:
 	JS_ClearPendingException(ctx);
 }
 
+#if !defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT) && defined(HAVE_JS_SETBRANCHCALLBACK)
 static JSBool
 safeguard(JSContext *ctx, JSScript *script)
 {
 	struct ecmascript_interpreter *interpreter = JS_GetContextPrivate(ctx);
-	int max_exec_time = get_opt_int("ecmascript.max_exec_time");
+	struct session *ses = interpreter->vs->doc_view->session;
+	int max_exec_time = get_opt_int("ecmascript.max_exec_time", ses);
 
 	if (time(NULL) - interpreter->exec_start > max_exec_time) {
-		struct terminal *term = interpreter->vs->doc_view->session->tab->term;
+		struct terminal *term = ses->tab->term;
 
 		/* A killer script! Alert! */
 		ecmascript_timeout_dialog(term, max_exec_time);
@@ -132,6 +136,7 @@ setup_safeguard(struct ecmascript_interpreter *interpreter,
 	interpreter->exec_start = time(NULL);
 	JS_SetBranchCallback(ctx, safeguard);
 }
+#endif
 
 
 static void
@@ -164,16 +169,14 @@ spidermonkey_get_interpreter(struct ecmascript_interpreter *interpreter)
 		return NULL;
 	interpreter->backend_data = ctx;
 	JS_SetContextPrivate(ctx, interpreter);
-	/* TODO: Make JSOPTION_STRICT and JSOPTION_WERROR configurable. */
-#ifndef JSOPTION_COMPILE_N_GO
-#define JSOPTION_COMPILE_N_GO 0 /* Older SM versions don't have it. */
-#endif
-	/* XXX: JSOPTION_COMPILE_N_GO will go (will it?) when we implement
-	 * some kind of bytecode cache. (If we will ever do that.) */
-	JS_SetOptions(ctx, JSOPTION_VAROBJFIX | JSOPTION_COMPILE_N_GO);
+	JS_SetOptions(ctx, JSOPTION_VAROBJFIX | JSOPTION_JIT | JSOPTION_METHODJIT);
+	JS_SetVersion(ctx, JSVERSION_LATEST);
 	JS_SetErrorReporter(ctx, error_reporter);
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	JS_SetOperationCallback(ctx, heartbeat_callback);
+#endif
 
-	window_obj = JS_NewObject(ctx, (JSClass *) &window_class, NULL, NULL);
+	window_obj = JS_NewCompartmentAndGlobalObject(ctx, (JSClass *) &window_class, NULL);
 	if (!window_obj) goto release_and_fail;
 	if (!JS_InitStandardClasses(ctx, window_obj)) goto release_and_fail;
 	if (!JS_DefineProperties(ctx, window_obj, (JSPropertySpec *) window_props))
@@ -263,10 +266,17 @@ spidermonkey_eval(struct ecmascript_interpreter *interpreter,
 	assert(interpreter);
 	if (!js_module_init_ok) return;
 	ctx = interpreter->backend_data;
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	interpreter->heartbeat = add_heartbeat(interpreter);
+#elif defined(HAVE_JS_SETBRANCHCALLBACK)
 	setup_safeguard(interpreter, ctx);
+#endif
 	interpreter->ret = ret;
 	JS_EvaluateScript(ctx, JS_GetGlobalObject(ctx),
 	                  code->source, code->length, "", 0, &rval);
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	done_heartbeat(interpreter->heartbeat);
+#endif
 }
 
 
@@ -274,20 +284,28 @@ unsigned char *
 spidermonkey_eval_stringback(struct ecmascript_interpreter *interpreter,
 			     struct string *code)
 {
+	JSBool ret;
 	JSContext *ctx;
 	jsval rval;
 
 	assert(interpreter);
 	if (!js_module_init_ok) return NULL;
 	ctx = interpreter->backend_data;
-	setup_safeguard(interpreter, ctx);
 	interpreter->ret = NULL;
-	if (JS_EvaluateScript(ctx, JS_GetGlobalObject(ctx),
-			      code->source, code->length, "", 0, &rval)
-	    == JS_FALSE) {
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	interpreter->heartbeat = add_heartbeat(interpreter);
+#elif defined(HAVE_JS_SETBRANCHCALLBACK)
+	setup_safeguard(interpreter, ctx);
+#endif
+	ret = JS_EvaluateScript(ctx, JS_GetGlobalObject(ctx),
+	                        code->source, code->length, "", 0, &rval);
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	done_heartbeat(interpreter->heartbeat);
+#endif
+	if (ret == JS_FALSE) {
 		return NULL;
 	}
-	if (JSVAL_IS_VOID(rval)) {
+	if (JSVAL_IS_VOID(rval) || JSVAL_IS_NULL(rval)) {
 		/* Undefined value. */
 		return NULL;
 	}
@@ -308,14 +326,21 @@ spidermonkey_eval_boolback(struct ecmascript_interpreter *interpreter,
 	assert(interpreter);
 	if (!js_module_init_ok) return 0;
 	ctx = interpreter->backend_data;
-	setup_safeguard(interpreter, ctx);
 	interpreter->ret = NULL;
 	fun = JS_CompileFunction(ctx, NULL, "", 0, NULL, code->source,
 				 code->length, "", 0);
 	if (!fun)
 		return -1;
 
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	interpreter->heartbeat = add_heartbeat(interpreter);
+#elif defined(HAVE_JS_SETBRANCHCALLBACK)
+	setup_safeguard(interpreter, ctx);
+#endif
 	ret = JS_CallFunction(ctx, NULL, fun, 0, NULL, &rval);
+#if defined(CONFIG_ECMASCRIPT_SMJS_HEARTBEAT)
+	done_heartbeat(interpreter->heartbeat);
+#endif
 	if (ret == 2) { /* onClick="history.back()" */
 		return 0;
 	}

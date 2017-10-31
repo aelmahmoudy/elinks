@@ -663,7 +663,7 @@ test_search(struct listbox_item *item, void *data_, int *offset)
 
 		assert(ctx->title && ctx->url);
 
-		ctx->found = (*ctx->url && c_strcasestr(bm->url, ctx->url));
+		ctx->found = (*ctx->url && c_strcasestr((const char *)bm->url, (const char *)ctx->url));
 		if (!ctx->found && *ctx->title) {
 			/* The comparison of bookmark titles should
 			 * be case-insensitive and locale-sensitive
@@ -687,7 +687,7 @@ test_search(struct listbox_item *item, void *data_, int *offset)
 			}
 
 			if (title) {
-				ctx->found = (strcasestr(title, ctx->title)
+				ctx->found = (strcasestr((const char *)title, (const char *)ctx->title)
 					      != NULL);
 				mem_free(title);
 			}
@@ -951,7 +951,7 @@ bookmark_terminal_tabs_dialog(struct terminal *term)
 
 #ifdef HAVE_STRFTIME
 	add_to_string(&string, " - ");
-	add_date_to_string(&string, get_opt_str("ui.date_format"), NULL);
+	add_date_to_string(&string, get_opt_str("ui.date_format", NULL), NULL);
 #endif
 
 	input_dialog(term, NULL,

@@ -111,7 +111,7 @@ static void bookmark_snapshot();
 static enum evhook_status
 bookmark_write_hook(va_list ap, void *data)
 {
-	if (get_opt_bool("ui.sessions.snapshot")
+	if (get_opt_bool("ui.sessions.snapshot", NULL)
 	    && !get_cmd_opt_bool("anonymous"))
 		bookmark_snapshot();
 
@@ -650,7 +650,7 @@ get_auto_save_bookmark_foldername_utf8(void)
 	int from_cp, to_cp;
 	struct conv_table *convert_table;
 
-	foldername = get_opt_str("ui.sessions.auto_save_foldername");
+	foldername = get_opt_str("ui.sessions.auto_save_foldername", NULL);
 	if (!*foldername) return NULL;
 
 	/* The charset of the string returned by get_opt_str()
@@ -673,7 +673,7 @@ bookmark_auto_save_tabs(struct terminal *term)
 	unsigned char *foldername; /* UTF-8 */
 
 	if (get_cmd_opt_bool("anonymous")
-	    || !get_opt_bool("ui.sessions.auto_save"))
+	    || !get_opt_bool("ui.sessions.auto_save", NULL))
 		return;
 
 	foldername = get_auto_save_bookmark_foldername_utf8();
@@ -699,7 +699,8 @@ bookmark_snapshot(void)
 
 #ifdef HAVE_STRFTIME
 	add_to_string(&folderstring, " - ");
-	add_date_to_string(&folderstring, get_opt_str("ui.date_format"), NULL);
+	add_date_to_string(&folderstring, get_opt_str("ui.date_format", NULL),
+	                   NULL);
 #endif
 
 	/* folderstring must be in the system codepage because

@@ -6,11 +6,10 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ELinks 0.5pre0.CVS\n"
 "Report-Msgid-Bugs-To: elinks-users@linuxfromscratch.org\n"
-"POT-Creation-Date: 2012-10-28 14:13+0200\n"
+"POT-Creation-Date: 2009-03-28 23:54+0200\n"
 "PO-Revision-Date: 2003-01-03 03:41+0100\n"
 "Last-Translator: Yevgeny Gromov <yevgeny@tut.by>\n"
 "Language-Team: Belarusian <i18n@tut.by>\n"
-"Language: be\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=koi8-ru\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -38,7 +37,7 @@ msgstr ""
 #: src/mime/dialogs.c:132 src/protocol/auth/dialogs.c:115
 #: src/protocol/protocol.c:246 src/scripting/lua/core.c:399
 #: src/scripting/lua/core.c:480 src/scripting/python/dialogs.c:86
-#: src/session/session.c:821 src/viewer/text/search.c:1710
+#: src/session/session.c:820 src/viewer/text/search.c:1704
 #, fuzzy
 msgid "~OK"
 msgstr "ОК"
@@ -141,19 +140,19 @@ msgstr "Так"
 msgid "~No"
 msgstr "Не"
 
-#: src/bfu/hierbox.c:945 src/bfu/hierbox.c:976 src/viewer/text/search.c:1112
-#: src/viewer/text/search.c:1120 src/viewer/text/search.c:1136
-#: src/viewer/text/search.c:1729
+#: src/bfu/hierbox.c:945 src/bfu/hierbox.c:976 src/viewer/text/search.c:1106
+#: src/viewer/text/search.c:1114 src/viewer/text/search.c:1130
+#: src/viewer/text/search.c:1723
 msgid "Search"
 msgstr "Пошук"
 
-#: src/bfu/hierbox.c:947 src/viewer/text/search.c:1113
+#: src/bfu/hierbox.c:947 src/viewer/text/search.c:1107
 #, fuzzy, c-format
 msgid "Search string '%s' not found"
 msgstr "Шукаемы радок не знайдзены"
 
 #: src/bfu/hierbox.c:976 src/config/dialogs.c:140 src/config/dialogs.c:329
-#: src/config/dialogs.c:477 src/cookies/dialogs.c:34 src/cookies/dialogs.c:366
+#: src/config/dialogs.c:479 src/cookies/dialogs.c:34 src/cookies/dialogs.c:366
 #: src/dialogs/edit.c:92 src/dialogs/edit.c:94 src/scripting/lua/core.c:395
 #: src/scripting/lua/core.c:396 src/scripting/lua/core.c:477
 msgid "Name"
@@ -172,7 +171,7 @@ msgstr "У поле пав╕нен быць л╕к"
 msgid "Number should be in the range from %d to %d."
 msgstr ""
 
-#: src/bfu/inpfield.c:99 src/config/dialogs.c:430
+#: src/bfu/inpfield.c:99 src/config/dialogs.c:432
 msgid "Bad string"
 msgstr "Няправ╕льны радок"
 
@@ -184,10 +183,10 @@ msgstr "Пустыя радк╕ не дазваляюцца"
 #: src/bfu/inpfield.c:256 src/config/dialogs.c:366 src/cookies/dialogs.c:373
 #: src/cookies/dialogs.c:471 src/dialogs/edit.c:102 src/dialogs/edit.c:105
 #: src/dialogs/options.c:237 src/dialogs/options.c:316 src/mime/dialogs.c:133
-#: src/protocol/auth/dialogs.c:116 src/protocol/bittorrent/dialogs.c:820
+#: src/protocol/auth/dialogs.c:116 src/protocol/bittorrent/dialogs.c:814
 #: src/scripting/lua/core.c:400 src/scripting/lua/core.c:481
-#: src/session/download.c:740 src/session/download.c:1552
-#: src/viewer/text/search.c:1711
+#: src/session/download.c:633 src/session/download.c:1245
+#: src/viewer/text/search.c:1705
 #, fuzzy
 msgid "~Cancel"
 msgstr "Адмена"
@@ -202,7 +201,7 @@ msgid "Digital clock in the status bar."
 msgstr ""
 
 #: src/bfu/leds.c:77 src/bfu/leds.c:94 src/config/options.inc:1272
-#: src/config/options.inc:1279 src/ecmascript/ecmascript.c:44
+#: src/config/options.inc:1279 src/ecmascript/ecmascript.c:45
 #: src/globhist/globhist.c:64 src/mime/backend/mailcap.c:93
 #: src/mime/backend/mimetypes.c:52 src/network/ssl/ssl.c:81
 #, fuzzy
@@ -452,7 +451,7 @@ msgid "~Goto"
 msgstr "Пайц╕"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons)
-#: src/bookmarks/dialogs.c:594 src/config/dialogs.c:501
+#: src/bookmarks/dialogs.c:594 src/config/dialogs.c:503
 #: src/cookies/dialogs.c:492
 #, fuzzy
 msgid "~Edit"
@@ -460,14 +459,14 @@ msgstr "Пра╝ка"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/menu.c:ext_menu, src/formhist/dialogs.c:formhist_buttons, src/globhist/dialogs.c:globhist_buttons, src/protocol/auth/dialogs.c:auth_buttons)
 #: src/bookmarks/dialogs.c:595 src/cache/dialogs.c:231
-#: src/config/dialogs.c:503 src/config/dialogs.c:930 src/cookies/dialogs.c:493
+#: src/config/dialogs.c:505 src/config/dialogs.c:930 src/cookies/dialogs.c:493
 #: src/dialogs/menu.c:463 src/formhist/dialogs.c:211
 #: src/globhist/dialogs.c:229 src/protocol/auth/dialogs.c:263
 msgid "~Delete"
 msgstr "Выдал╕ць"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/menu.c:ext_menu)
-#: src/bookmarks/dialogs.c:596 src/config/dialogs.c:502
+#: src/bookmarks/dialogs.c:596 src/config/dialogs.c:504
 #: src/config/dialogs.c:929 src/cookies/dialogs.c:490 src/dialogs/menu.c:461
 msgid "~Add"
 msgstr "Дадаць"
@@ -492,7 +491,7 @@ msgstr "Перамясц╕ць"
 
 #. accelerator_context(src/bookmarks/dialogs.c:bookmark_buttons, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/dialogs/menu.c:view_menu, src/globhist/dialogs.c:globhist_buttons)
 #: src/bookmarks/dialogs.c:600 src/cache/dialogs.c:232
-#: src/config/dialogs.c:504 src/config/dialogs.c:932 src/dialogs/menu.c:413
+#: src/config/dialogs.c:506 src/config/dialogs.c:932 src/dialogs/menu.c:413
 #: src/globhist/dialogs.c:230
 msgid "~Search"
 msgstr "Пошук"
@@ -646,7 +645,7 @@ msgid "Delete this cache entry?"
 msgstr ""
 
 #. accelerator_context(display_download, src/cache/dialogs.c:cache_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/dialogs/download.c:download_buttons, src/formhist/dialogs.c:formhist_buttons, src/globhist/dialogs.c:globhist_buttons, src/protocol/auth/dialogs.c:auth_buttons)
-#: src/cache/dialogs.c:229 src/config/dialogs.c:500 src/cookies/dialogs.c:489
+#: src/cache/dialogs.c:229 src/config/dialogs.c:502 src/cookies/dialogs.c:489
 #: src/dialogs/download.c:255 src/dialogs/download.c:492
 #: src/formhist/dialogs.c:210 src/globhist/dialogs.c:225
 #: src/protocol/auth/dialogs.c:262
@@ -1871,8 +1870,8 @@ msgid "Description"
 msgstr "Ап╕санне"
 
 #: src/config/dialogs.c:291 src/protocol/bittorrent/dialogs.c:600
-#: src/protocol/protocol.c:240 src/session/session.c:288
-#: src/session/session.c:999 src/viewer/text/textarea.c:583
+#: src/protocol/protocol.c:240 src/session/session.c:287
+#: src/session/session.c:995 src/viewer/text/textarea.c:583
 #: src/viewer/text/textarea.c:590
 msgid "Error"
 msgstr "Памылка"
@@ -1892,29 +1891,29 @@ msgid ""
 "like a folder - try to press a space in order to see its contents."
 msgstr "Гэты параметр змян╕ць немагчыма"
 
-#: src/config/dialogs.c:431
+#: src/config/dialogs.c:433
 msgid ""
 "Option names may only contain alpha-numeric characters\n"
-"in addition to '_', '-', '+', and '*'."
+"in addition to '_' and '-'."
 msgstr ""
 
-#: src/config/dialogs.c:452 src/config/dialogs.c:477
+#: src/config/dialogs.c:454 src/config/dialogs.c:479
 msgid "Add option"
 msgstr "Дадаць параметр"
 
-#: src/config/dialogs.c:453
+#: src/config/dialogs.c:455
 msgid "Cannot add an option here."
 msgstr "Тут нельга дадаць параметр"
 
 #. accelerator_context(src/config/dialogs.c:keybinding_buttons, src/config/dialogs.c:option_buttons, src/cookies/dialogs.c:cookie_buttons, src/formhist/dialogs.c:formhist_buttons, src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query, terminal_options)
-#: src/config/dialogs.c:505 src/config/dialogs.c:933 src/cookies/dialogs.c:495
+#: src/config/dialogs.c:507 src/config/dialogs.c:933 src/cookies/dialogs.c:495
 #: src/dialogs/options.c:236 src/formhist/dialogs.c:214
-#: src/protocol/bittorrent/dialogs.c:807 src/session/download.c:1536
+#: src/protocol/bittorrent/dialogs.c:801 src/session/download.c:1229
 #, fuzzy
 msgid "Sa~ve"
 msgstr "Захаваць"
 
-#: src/config/dialogs.c:510
+#: src/config/dialogs.c:512
 #, fuzzy
 msgid "Option manager"
 msgstr "Мэнэджэр параметра╝"
@@ -3080,7 +3079,7 @@ msgstr ""
 
 #. OPT_CODEPAGE
 #: src/config/options.inc:676 src/config/options.inc:980
-#: src/config/opttypes.c:486 src/dialogs/document.c:164
+#: src/config/opttypes.c:481 src/dialogs/document.c:164
 msgid "Codepage"
 msgstr "Кодавая старонка"
 
@@ -3700,7 +3699,7 @@ msgstr "Тэкставае поле"
 msgid "Dialog text colors."
 msgstr ""
 
-#: src/config/options.inc:1128 src/viewer/text/form.c:1888
+#: src/config/options.inc:1128 src/viewer/text/form.c:1891
 msgid "Checkbox"
 msgstr "Адзнака"
 
@@ -3753,7 +3752,7 @@ msgstr ""
 msgid "Selected button shortcut"
 msgstr "Выдал╕ць параметр"
 
-#: src/config/options.inc:1156 src/viewer/text/form.c:1892
+#: src/config/options.inc:1156 src/viewer/text/form.c:1895
 msgid "Text field"
 msgstr "Тэкставае поле"
 
@@ -4046,7 +4045,7 @@ msgid "When closing a tab show confirmation dialog."
 msgstr ""
 
 #. OPT_LANGUAGE
-#: src/config/options.inc:1324 src/config/opttypes.c:488
+#: src/config/options.inc:1324 src/config/opttypes.c:483
 msgid "Language"
 msgstr "Мова"
 
@@ -4193,68 +4192,68 @@ msgstr "Памылка захавання"
 
 #. The OPT_ comments below are here to be found by grep.
 #. OPT_BOOL
-#: src/config/opttypes.c:477
+#: src/config/opttypes.c:472
 msgid "Boolean"
 msgstr "лаг╕чны"
 
-#: src/config/opttypes.c:477
+#: src/config/opttypes.c:472
 msgid "[0|1]"
 msgstr ""
 
 #. OPT_INT
-#: src/config/opttypes.c:479
+#: src/config/opttypes.c:474
 msgid "Integer"
 msgstr "цэлы л╕к"
 
-#: src/config/opttypes.c:479 src/config/opttypes.c:481
+#: src/config/opttypes.c:474 src/config/opttypes.c:476
 msgid "<num>"
 msgstr ""
 
 #. OPT_LONG
-#: src/config/opttypes.c:481
+#: src/config/opttypes.c:476
 msgid "Longint"
 msgstr "до╝г╕ цэлы л╕к"
 
 #. OPT_STRING
-#: src/config/opttypes.c:483
+#: src/config/opttypes.c:478
 msgid "String"
 msgstr "радок"
 
-#: src/config/opttypes.c:483
+#: src/config/opttypes.c:478
 msgid "<str>"
 msgstr ""
 
-#: src/config/opttypes.c:486
+#: src/config/opttypes.c:481
 #, fuzzy
 msgid "<codepage>"
 msgstr "Кодавая старонка"
 
-#: src/config/opttypes.c:488
+#: src/config/opttypes.c:483
 #, fuzzy
 msgid "<language>"
 msgstr "Мова"
 
 #. OPT_COLOR
-#: src/config/opttypes.c:490
+#: src/config/opttypes.c:485
 msgid "Color"
 msgstr "Колер"
 
-#: src/config/opttypes.c:490
+#: src/config/opttypes.c:485
 msgid "<color|#rrggbb>"
 msgstr ""
 
 #. OPT_COMMAND
-#: src/config/opttypes.c:493
+#: src/config/opttypes.c:488
 msgid "Special"
 msgstr ""
 
 #. OPT_ALIAS
-#: src/config/opttypes.c:496
+#: src/config/opttypes.c:491
 msgid "Alias"
 msgstr ""
 
 #. OPT_TREE
-#: src/config/opttypes.c:499
+#: src/config/opttypes.c:494
 msgid "Folder"
 msgstr "Папка"
 
@@ -4565,7 +4564,7 @@ msgid "No header info."
 msgstr ""
 
 #: src/dialogs/download.c:243 src/dialogs/menu.c:601
-#: src/protocol/bittorrent/dialogs.c:228 src/session/download.c:389
+#: src/protocol/bittorrent/dialogs.c:228 src/session/download.c:387
 msgid "Download"
 msgstr "Закачка"
 
@@ -4677,9 +4676,7 @@ msgid ""
 "Software Foundation, specifically version 2 of the License."
 msgstr ""
 "\n"
-"Гэта программа з'я╝ляецца свабодным ПЗ; вы можаце распа╝сюджваць ╕/ц╕ мадыф╕каваць яе згодна з л╕цэнз╕яй "
-"GNU, якая апубл╕кавана \"Фондам свабоднага праграмнага забеспячэння"
-"\" (FSF); верс╕╕ 2 Л╕цэнз╕╕, ц╕ (па вашым жаданн╕) больш позняй верс╕╕"
+"Гэта программа з'я╝ляецца свабодным ПЗ; вы можаце распа╝сюджваць ╕/ц╕ мадыф╕каваць яе згодна з л╕цэнз╕яй GNU, якая апубл╕кавана \"Фондам свабоднага праграмнага забеспячэння\" (FSF); верс╕╕ 2 Л╕цэнз╕╕, ц╕ (па вашым жаданн╕) больш позняй верс╕╕"
 
 #: src/dialogs/info.c:169 src/dialogs/info.c:274
 msgid "Resources"
@@ -5461,66 +5458,75 @@ msgid ""
 msgstr ""
 
 #. name:
-#: src/ecmascript/ecmascript.c:40 src/ecmascript/ecmascript.c:325
+#: src/ecmascript/ecmascript.c:41 src/ecmascript/ecmascript.c:351
 #, fuzzy
 msgid "ECMAScript"
 msgstr "Ап╕санне"
 
-#: src/ecmascript/ecmascript.c:42
+#: src/ecmascript/ecmascript.c:43
 #, fuzzy
 msgid "ECMAScript options."
 msgstr "Настройк╕ тэрм╕нала"
 
-#: src/ecmascript/ecmascript.c:46
+#: src/ecmascript/ecmascript.c:47
 msgid "Whether to run those scripts inside of documents."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:48
+#: src/ecmascript/ecmascript.c:49
 msgid "Script error reporting"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:50
+#: src/ecmascript/ecmascript.c:51
 msgid "Open a message box when a script reports an error."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:52
+#: src/ecmascript/ecmascript.c:53
 msgid "Ignore <noscript> content"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:54
+#: src/ecmascript/ecmascript.c:55
 msgid ""
 "Whether to ignore content enclosed by the <noscript> tag when ECMAScript is "
 "enabled."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:57
+#: src/ecmascript/ecmascript.c:58
 #, fuzzy
 msgid "Maximum execution time"
 msgstr "Злучэнне"
 
-#: src/ecmascript/ecmascript.c:59
+#: src/ecmascript/ecmascript.c:60
 msgid "Maximum execution time in seconds for a script."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:61
+#: src/ecmascript/ecmascript.c:62
 msgid "Pop-up window blocking"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:63
+#: src/ecmascript/ecmascript.c:64
 msgid "Whether to disallow scripts to open new windows or tabs."
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:241
+#: src/ecmascript/ecmascript.c:265
 msgid "JavaScript Emergency"
 msgstr ""
 
-#: src/ecmascript/ecmascript.c:243
+#: src/ecmascript/ecmascript.c:267
 #, c-format
 msgid ""
 "A script embedded in the current document was running\n"
 "for more than %d seconds. This probably means there is\n"
 "a bug in the script and it could have halted the whole\n"
 "ELinks, so the script execution was interrupted."
+msgstr ""
+
+#. name:
+#: src/ecmascript/see.c:186
+msgid "SEE"
+msgstr ""
+
+#: src/ecmascript/see/window.c:229 src/ecmascript/spidermonkey/window.c:331
+msgid "JavaScript Alert"
 msgstr ""
 
 #: src/ecmascript/spidermonkey.c:88
@@ -5533,12 +5539,8 @@ msgid "JavaScript Error"
 msgstr ""
 
 #. name:
-#: src/ecmascript/spidermonkey.c:334
+#: src/ecmascript/spidermonkey.c:321
 msgid "SpiderMonkey"
-msgstr ""
-
-#: src/ecmascript/spidermonkey/window.c:329
-msgid "JavaScript Alert"
 msgstr ""
 
 #: src/formhist/dialogs.c:67
@@ -5763,7 +5765,7 @@ msgid ""
 msgstr ""
 
 #. name:
-#: src/globhist/globhist.c:449
+#: src/globhist/globhist.c:452
 #, fuzzy
 msgid "Global History"
 msgstr "Праца з г╕сторыяй"
@@ -6082,7 +6084,7 @@ msgid "Option system"
 msgstr ""
 
 #. name:
-#: src/mime/backend/mailcap.c:89 src/mime/backend/mailcap.c:691
+#: src/mime/backend/mailcap.c:89 src/mime/backend/mailcap.c:686
 msgid "Mailcap"
 msgstr ""
 
@@ -6128,7 +6130,7 @@ msgid ""
 "the handler."
 msgstr ""
 
-#: src/mime/backend/mailcap.c:356
+#: src/mime/backend/mailcap.c:351
 #, c-format
 msgid "Badly formated mailcap entry for type %s in \"%s\" line %d"
 msgstr ""
@@ -7022,7 +7024,7 @@ msgstr "Файл"
 msgid "Comment"
 msgstr "дакумента╝"
 
-#: src/protocol/bittorrent/dialogs.c:229 src/session/download.c:390
+#: src/protocol/bittorrent/dialogs.c:229 src/session/download.c:388
 #, fuzzy, c-format
 msgid ""
 "Download complete:\n"
@@ -7190,39 +7192,39 @@ msgid_plural "%u unavailable"
 msgstr[0] "Сэрв╕с FTP недаступны"
 msgstr[1] "Сэрв╕с FTP недаступны"
 
-#: src/protocol/bittorrent/dialogs.c:584 src/session/session.c:279
+#: src/protocol/bittorrent/dialogs.c:584 src/session/session.c:278
 #, fuzzy, c-format
 msgid "Unable to retrieve %s"
 msgstr "Немагчыма зап╕саць у файл настроек"
 
-#: src/protocol/bittorrent/dialogs.c:743
+#: src/protocol/bittorrent/dialogs.c:737
 #, c-format
 msgid "What would you like to do with the file '%s'?"
 msgstr ""
 
-#: src/protocol/bittorrent/dialogs.c:760
+#: src/protocol/bittorrent/dialogs.c:754
 #, fuzzy
 msgid "Information about the torrent"
 msgstr "Скачаць в╕дарыс"
 
-#: src/protocol/bittorrent/dialogs.c:782 src/session/download.c:1439
+#: src/protocol/bittorrent/dialogs.c:776 src/session/download.c:1132
 msgid "What to do?"
 msgstr "Што раб╕ць?"
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback)
-#: src/protocol/bittorrent/dialogs.c:804
+#: src/protocol/bittorrent/dialogs.c:798
 #, fuzzy
 msgid "Down~load"
 msgstr "Закачка"
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query)
-#: src/protocol/bittorrent/dialogs.c:810 src/session/download.c:1542
+#: src/protocol/bittorrent/dialogs.c:804 src/session/download.c:1235
 #, fuzzy
 msgid "~Display"
 msgstr "Паказаць"
 
 #. accelerator_context(src/protocol/bittorrent/dialogs.c:bittorrent_query_callback, src/session/download.c:do_type_query)
-#: src/protocol/bittorrent/dialogs.c:814 src/session/download.c:1546
+#: src/protocol/bittorrent/dialogs.c:808 src/session/download.c:1239
 msgid "Show ~header"
 msgstr ""
 
@@ -7335,7 +7337,7 @@ msgid "FTP specific options."
 msgstr ""
 
 #: src/protocol/ftp/ftp.c:60 src/protocol/http/http.c:128
-#: src/protocol/http/http.c:242
+#: src/protocol/http/http.c:235
 msgid "Proxy configuration"
 msgstr ""
 
@@ -7344,7 +7346,7 @@ msgid "FTP proxy configuration."
 msgstr ""
 
 #: src/protocol/ftp/ftp.c:64 src/protocol/http/http.c:132
-#: src/protocol/http/http.c:246
+#: src/protocol/http/http.c:239
 #, fuzzy
 msgid "Host and port-number"
 msgstr "Няправ╕льны л╕к"
@@ -7402,7 +7404,7 @@ msgid ""
 msgstr ""
 
 #. name:
-#: src/protocol/http/http.c:95 src/protocol/http/http.c:257
+#: src/protocol/http/http.c:95 src/protocol/http/http.c:250
 msgid "HTTP"
 msgstr ""
 
@@ -7541,20 +7543,13 @@ msgid ""
 "tells web-masters and the FBI sniffers about your language preference."
 msgstr ""
 
-#. http://www.eweek.com/c/a/Desktops-and-Notebooks/Intel-Psion-End-Dispute-Concerning-Netbook-Trademark-288875/
-#. * responds with "Transfer-Encoding: chunked" and
-#. * "Content-Encoding: gzip" but does not compress the first chunk
-#. * and the last chunk, causing ELinks to display garbage.
-#. * (If User-Agent includes "Gecko" (case sensitive), then
-#. * that server correctly compresses the whole stream.)
-#. * ELinks should instead report the decompression error (bug 1017)
-#. * or perhaps even blacklist the server for compression and retry.
-#. * Until that has been implemented, disable compression by default.
-#: src/protocol/http/http.c:194
+#. After the compression support has been tested enough,
+#. * we might wrap this option in #if CFG_DEBUG.
+#: src/protocol/http/http.c:187
 msgid "Enable on-the-fly compression"
 msgstr ""
 
-#: src/protocol/http/http.c:196
+#: src/protocol/http/http.c:189
 msgid ""
 "If enabled, the capability to receive compressed content (gzip and/or bzip2) "
 "is announced to the server, which usually sends the reply compressed, thus "
@@ -7568,11 +7563,11 @@ msgid ""
 "effect. To check the supported features, see Help -> About."
 msgstr ""
 
-#: src/protocol/http/http.c:209
+#: src/protocol/http/http.c:202
 msgid "Activate HTTP TRACE debugging"
 msgstr ""
 
-#: src/protocol/http/http.c:211
+#: src/protocol/http/http.c:204
 msgid ""
 "If active, all HTTP requests are sent with TRACE as their method rather than "
 "GET or POST. This is useful for debugging of both ELinks and various server-"
@@ -7582,11 +7577,11 @@ msgid ""
 msgstr ""
 
 #. OSNews.com is supposed to be relying on the textmode token, at least.
-#: src/protocol/http/http.c:219
+#: src/protocol/http/http.c:212
 msgid "User-agent identification"
 msgstr ""
 
-#: src/protocol/http/http.c:221
+#: src/protocol/http/http.c:214
 msgid ""
 "Change the User Agent ID. That means identification string, which is sent to "
 "HTTP server when a document is requested. The 'textmode' token in the first "
@@ -7602,20 +7597,20 @@ msgid ""
 "%b in the string means number of bars displayed by ELinks."
 msgstr ""
 
-#: src/protocol/http/http.c:238
+#: src/protocol/http/http.c:231
 msgid "HTTPS"
 msgstr ""
 
-#: src/protocol/http/http.c:240
+#: src/protocol/http/http.c:233
 #, fuzzy
 msgid "HTTPS-specific options."
 msgstr "Не ╝казана праграма для"
 
-#: src/protocol/http/http.c:244
+#: src/protocol/http/http.c:237
 msgid "HTTPS proxy configuration."
 msgstr ""
 
-#: src/protocol/http/http.c:248
+#: src/protocol/http/http.c:241
 msgid ""
 "Host and port-number (host:port) of the HTTPS CONNECT proxy, or blank. If "
 "it's blank, HTTPS_PROXY environment variable is checked as well."
@@ -7903,10 +7898,6 @@ msgstr ""
 msgid "Scripting"
 msgstr "Ап╕санне"
 
-#: src/scripting/smjs/action_object.c:86
-msgid "Cannot run actions in a tab that doesn't have the focus"
-msgstr ""
-
 #: src/scripting/smjs/elinks_object.c:86
 msgid "User script alert"
 msgstr ""
@@ -7917,19 +7908,19 @@ msgstr ""
 msgid "Spidermonkey ECMAScript"
 msgstr "Ап╕санне"
 
-#: src/session/download.c:258 src/session/download.c:358
-#: src/session/download.c:696 src/session/download.c:799
+#: src/session/download.c:256 src/session/download.c:356
+#: src/session/download.c:587 src/session/download.c:675
 msgid "Download error"
 msgstr "Памылка закачк╕"
 
-#: src/session/download.c:259 src/session/download.c:800
+#: src/session/download.c:257 src/session/download.c:676
 #, fuzzy, c-format
 msgid ""
 "Could not create file '%s':\n"
 "%s"
 msgstr "Немагчыма зап╕саць у файл"
 
-#: src/session/download.c:359
+#: src/session/download.c:357
 #, fuzzy, c-format
 msgid ""
 "Error downloading %s:\n"
@@ -7937,17 +7928,17 @@ msgid ""
 "%s"
 msgstr "Памылка закачк╕"
 
-#: src/session/download.c:697
+#: src/session/download.c:588
 #, c-format
 msgid "'%s' is a directory."
 msgstr ""
 
-#: src/session/download.c:726
+#: src/session/download.c:622
 #, fuzzy
 msgid "File exists"
 msgstr "Расшырэнн╕ файла╝"
 
-#: src/session/download.c:727
+#: src/session/download.c:623
 #, c-format
 msgid ""
 "This file already exists:\n"
@@ -7958,51 +7949,51 @@ msgid ""
 msgstr ""
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:734
+#: src/session/download.c:630
 msgid "Sa~ve under the alternative name"
 msgstr ""
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:735
+#: src/session/download.c:631
 msgid "~Overwrite the original file"
 msgstr ""
 
 #. accelerator_context(src/session/download.c:lookup_unique_name)
-#: src/session/download.c:737
+#: src/session/download.c:632
 msgid "~Resume download of the original file"
 msgstr ""
 
-#: src/session/download.c:1442
+#: src/session/download.c:1135
 msgid "Unknown type"
 msgstr "Невядомы тып"
 
-#: src/session/download.c:1467
+#: src/session/download.c:1160
 #, c-format
 msgid "What would you like to do with the file '%s' (type: %s%s%s)?"
 msgstr ""
 
-#: src/session/download.c:1470
+#: src/session/download.c:1163
 #, c-format
 msgid "What would you like to do with the file (type: %s%s%s)?"
 msgstr ""
 
-#: src/session/download.c:1498
+#: src/session/download.c:1191
 #, no-c-format
 msgid "Program ('%' will be replaced by the filename)"
 msgstr ""
 
-#: src/session/download.c:1502
+#: src/session/download.c:1195
 #, fuzzy
 msgid "Block the terminal"
 msgstr "Тэрм╕нал BeOS"
 
-#: src/session/download.c:1508
+#: src/session/download.c:1201
 #, c-format
 msgid "The file will be opened with the program '%s'."
 msgstr ""
 
 #. accelerator_context(src/session/download.c:do_type_query)
-#: src/session/download.c:1529
+#: src/session/download.c:1222
 #, fuzzy
 msgid "~Open"
 msgstr "Адкрыць"
@@ -8011,12 +8002,12 @@ msgstr "Адкрыць"
 #. * and formatting it with "%u" is safe,
 #. * because fc_maxlength is smaller than
 #. * file.length, which is an int.
-#: src/session/session.c:771 src/session/session.c:790 src/session/task.c:275
+#: src/session/session.c:770 src/session/session.c:789 src/session/task.c:275
 #: src/viewer/text/textarea.c:641
 msgid "Warning"
 msgstr "Увага"
 
-#: src/session/session.c:772
+#: src/session/session.c:771
 msgid ""
 "You have an empty string in protocol.http.user_agent - this was a default "
 "value in the past, substituted by default ELinks User-Agent string. However, "
@@ -8027,7 +8018,7 @@ msgid ""
 "will be used. Apologies for any inconvience caused."
 msgstr ""
 
-#: src/session/session.c:791
+#: src/session/session.c:790
 msgid ""
 "You have option config.saving_style set to a de facto obsolete value. The "
 "configuration saving algorithms of ELinks were changed from the last time "
@@ -8040,20 +8031,17 @@ msgid ""
 "caused."
 msgstr ""
 
-#: src/session/session.c:816
+#: src/session/session.c:815
 msgid "Welcome"
 msgstr "В╕таю"
 
-#: src/session/session.c:817
+#: src/session/session.c:816
 #, fuzzy
 msgid ""
 "Welcome to ELinks!\n"
 "\n"
 "Press ESC for menu. Documentation is available in Help menu."
-msgstr ""
-"Нац╕сн╕це "
-"ESC для выкл╕ку меню. Прачытайце к╕ра╝н╕цтва карыстальн╕ка, выбра╝шы ╝ меню "
-"'Даведка->Дапаможн╕к'."
+msgstr "Нац╕сн╕це ESC для выкл╕ку меню. Прачытайце к╕ра╝н╕цтва карыстальн╕ка, выбра╝шы ╝ меню 'Даведка->Дапаможн╕к'."
 
 #: src/session/task.c:243
 #, c-format
@@ -8112,7 +8100,7 @@ msgstr ""
 msgid "Could not read event: %d (%s)"
 msgstr "Немагчыма зап╕саць у файл"
 
-#: src/terminal/kbd.c:1214
+#: src/terminal/kbd.c:1210
 #, c-format
 msgid "Too many bytes read from the itrm!"
 msgstr ""
@@ -8166,17 +8154,17 @@ msgstr "Пасылка зап╕су ╝ файл"
 msgid "Secure file saving error"
 msgstr "Памылка файла на FTP"
 
-#: src/viewer/dump/dump.c:401
+#: src/viewer/dump/dump.c:87
 #, fuzzy, c-format
 msgid "Can't write to stdout: %s"
 msgstr "Памылка запису ╝ сокет"
 
-#: src/viewer/dump/dump.c:404
+#: src/viewer/dump/dump.c:90
 #, fuzzy, c-format
 msgid "Can't write to stdout."
 msgstr "Памылка запису ╝ сокет"
 
-#: src/viewer/dump/dump.c:542
+#: src/viewer/dump/dump.c:286
 #, c-format
 msgid "URL protocol not supported (%s)."
 msgstr ""
@@ -8191,209 +8179,209 @@ msgstr "Няма рамак"
 msgid "The requested fragment \"%s\" doesn't exist."
 msgstr ""
 
-#: src/viewer/text/form.c:1115
+#: src/viewer/text/form.c:1118
 msgid "Error while posting form"
 msgstr "Памылка пад час адпра╝к╕ формы"
 
-#: src/viewer/text/form.c:1116
+#: src/viewer/text/form.c:1119
 #, fuzzy, c-format
 msgid "Could not load file %s: %s"
 msgstr "Немагчыма атрымаць файл"
 
-#: src/viewer/text/form.c:1873
+#: src/viewer/text/form.c:1876
 #, fuzzy
 msgid "Reset form"
 msgstr "Ачыстка формы"
 
-#: src/viewer/text/form.c:1875
+#: src/viewer/text/form.c:1878
 #, fuzzy
 msgid "Harmless button"
 msgstr "Выдал╕ць параметр"
 
-#: src/viewer/text/form.c:1883
+#: src/viewer/text/form.c:1886
 msgid "Submit form to"
 msgstr "Перадача формы па адрасу"
 
-#: src/viewer/text/form.c:1884
+#: src/viewer/text/form.c:1887
 msgid "Post form to"
 msgstr "Адпра╝ка формы па адресу"
 
-#: src/viewer/text/form.c:1886
+#: src/viewer/text/form.c:1889
 msgid "Radio button"
 msgstr "Радыё-кнопка"
 
-#: src/viewer/text/form.c:1890
+#: src/viewer/text/form.c:1893
 msgid "Select field"
 msgstr "Выбярыце поле"
 
-#: src/viewer/text/form.c:1894
+#: src/viewer/text/form.c:1897
 msgid "Text area"
 msgstr "Тэкставае поле"
 
-#: src/viewer/text/form.c:1896
+#: src/viewer/text/form.c:1899
 msgid "File upload"
 msgstr "Выгрузка файла"
 
-#: src/viewer/text/form.c:1898
+#: src/viewer/text/form.c:1901
 msgid "Password field"
 msgstr "Поле пароля"
 
-#: src/viewer/text/form.c:1936
+#: src/viewer/text/form.c:1939
 msgid "name"
 msgstr "метка"
 
-#: src/viewer/text/form.c:1948
+#: src/viewer/text/form.c:1951
 msgid "value"
 msgstr "значэнне"
 
-#: src/viewer/text/form.c:1961
+#: src/viewer/text/form.c:1964
 msgid "read only"
 msgstr ""
 
-#: src/viewer/text/form.c:1972
+#: src/viewer/text/form.c:1975
 #, c-format
 msgid "press %s to navigate"
 msgstr ""
 
-#: src/viewer/text/form.c:1974
+#: src/viewer/text/form.c:1977
 #, c-format
 msgid "press %s to edit"
 msgstr ""
 
-#: src/viewer/text/form.c:2010
+#: src/viewer/text/form.c:2013
 #, fuzzy, c-format
 msgid "press %s to submit to %s"
 msgstr "перадаць па адрасу"
 
-#: src/viewer/text/form.c:2012
+#: src/viewer/text/form.c:2015
 #, fuzzy, c-format
 msgid "press %s to post to %s"
 msgstr "перадаць па адрасу"
 
-#: src/viewer/text/form.c:2114
+#: src/viewer/text/form.c:2117
 #, fuzzy
 msgid "Useless button"
 msgstr "Выдал╕ць параметр"
 
-#: src/viewer/text/form.c:2116
+#: src/viewer/text/form.c:2119
 #, fuzzy
 msgid "Submit button"
 msgstr "Перадача формы па адрасу"
 
 #. accelerator_context(link_menu.map)
-#: src/viewer/text/link.c:1288
+#: src/viewer/text/link.c:1280
 msgid "Display ~usemap"
 msgstr "Паказаць карту"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1293
+#: src/viewer/text/link.c:1285
 msgid "~Follow link"
 msgstr "Нак╕равацца па спасылцы"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1295
+#: src/viewer/text/link.c:1287
 msgid "Follow link and r~eload"
 msgstr "Нак╕равацца па спасылцы ╕ перазагруз╕ць"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1299
+#: src/viewer/text/link.c:1291
 msgid "Open in new ~window"
 msgstr "Адкрыць у новым акне"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1301
+#: src/viewer/text/link.c:1293
 #, fuzzy
 msgid "Open in new ~tab"
 msgstr "Адкрыць у новым акне"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1303
+#: src/viewer/text/link.c:1295
 #, fuzzy
 msgid "Open in new tab in ~background"
 msgstr "У фоне"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1308
+#: src/viewer/text/link.c:1300
 msgid "~Download link"
 msgstr "Скачаць па спасылцы"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1311
+#: src/viewer/text/link.c:1303
 msgid "~Add link to bookmarks"
 msgstr "Дадаць спасылку ╝ закладк╕"
 
 #. accelerator_context(link_menu.std)
-#: src/viewer/text/link.c:1315
+#: src/viewer/text/link.c:1307
 msgid "Pass link URI to e~xternal command"
 msgstr ""
 
 #. accelerator_context(link_menu.form, link_menu.reset, link_menu.textarea)
-#: src/viewer/text/link.c:1326 src/viewer/text/link.c:1366
+#: src/viewer/text/link.c:1318 src/viewer/text/link.c:1358
 msgid "~Reset form"
 msgstr "Ачыстка формы"
 
 #. accelerator_context(link_menu.textarea)
-#: src/viewer/text/link.c:1341
+#: src/viewer/text/link.c:1333
 msgid "Open in ~external editor"
 msgstr ""
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1349
+#: src/viewer/text/link.c:1341
 msgid "~Submit form"
 msgstr "Паслаць форму"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1350
+#: src/viewer/text/link.c:1342
 msgid "Submit form and rel~oad"
 msgstr "Паслаць форму ╕ перазагруз╕ць"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1354
+#: src/viewer/text/link.c:1346
 msgid "Submit form and open in new ~window"
 msgstr "Паслаць форму ╕ адкрыць у новым акне"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1356
+#: src/viewer/text/link.c:1348
 #, fuzzy
 msgid "Submit form and open in new ~tab"
 msgstr "Паслаць форму ╕ адкрыць у новым акне"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1359
+#: src/viewer/text/link.c:1351
 #, fuzzy
 msgid "Submit form and open in new tab in ~background"
 msgstr "Паслаць форму ╕ адкрыць у новым акне"
 
 #. accelerator_context(link_menu.form, link_menu.textarea)
-#: src/viewer/text/link.c:1364
+#: src/viewer/text/link.c:1356
 msgid "Submit form and ~download"
 msgstr "Паслаць форму ╕ скачаць"
 
 #. accelerator_context(link_menu.form, link_menu.reset, link_menu.textarea)
-#: src/viewer/text/link.c:1371
+#: src/viewer/text/link.c:1363
 #, fuzzy
 msgid "Form f~ields"
 msgstr "Поле"
 
 #. accelerator_context(link_menu.form, link_menu.map, link_menu.std)
-#: src/viewer/text/link.c:1378
+#: src/viewer/text/link.c:1370
 msgid "V~iew image"
 msgstr "Праглядзець в╕дарыс"
 
 #. accelerator_context(link_menu.form, link_menu.map, link_menu.std)
-#: src/viewer/text/link.c:1380
+#: src/viewer/text/link.c:1372
 msgid "Download ima~ge"
 msgstr "Скачаць в╕дарыс"
 
-#: src/viewer/text/link.c:1389
+#: src/viewer/text/link.c:1381
 msgid "No link selected"
 msgstr "Няма выбраных спасылак"
 
-#: src/viewer/text/link.c:1461
+#: src/viewer/text/link.c:1451
 msgid "Image"
 msgstr "Малюнак"
 
-#: src/viewer/text/link.c:1466
+#: src/viewer/text/link.c:1456
 msgid "Usemap"
 msgstr "Карта спасылак"
 
@@ -8402,74 +8390,74 @@ msgstr "Карта спасылак"
 msgid "Marks"
 msgstr ""
 
-#: src/viewer/text/search.c:1105
+#: src/viewer/text/search.c:1099
 msgid "Search hit top, continuing at bottom."
 msgstr ""
 
-#: src/viewer/text/search.c:1106
+#: src/viewer/text/search.c:1100
 msgid "Search hit bottom, continuing at top."
 msgstr ""
 
-#: src/viewer/text/search.c:1109
+#: src/viewer/text/search.c:1103
 msgid "No previous search"
 msgstr "Раней пошуку не было"
 
-#: src/viewer/text/search.c:1121
+#: src/viewer/text/search.c:1115
 #, fuzzy, c-format
 msgid "Could not compile regular expression '%s'"
 msgstr "Увядз╕це выраз"
 
-#: src/viewer/text/search.c:1165
+#: src/viewer/text/search.c:1159
 #, c-format
 msgid "No further matches for '%s'."
 msgstr ""
 
-#: src/viewer/text/search.c:1167
+#: src/viewer/text/search.c:1161
 #, c-format
 msgid "Could not find a link with the text '%s'."
 msgstr ""
 
-#: src/viewer/text/search.c:1169 src/viewer/text/search.c:1582
+#: src/viewer/text/search.c:1163 src/viewer/text/search.c:1576
 #, fuzzy
 msgid "Typeahead"
 msgstr "Тып"
 
-#: src/viewer/text/search.c:1584
+#: src/viewer/text/search.c:1578
 #, c-format
 msgid "No links in current document"
 msgstr ""
 
-#: src/viewer/text/search.c:1667
+#: src/viewer/text/search.c:1661
 msgid "Search for text"
 msgstr "Пошук тэкста"
 
-#: src/viewer/text/search.c:1703
+#: src/viewer/text/search.c:1697
 #, fuzzy
 msgid "Normal search"
 msgstr "Раней пошуку не было"
 
-#: src/viewer/text/search.c:1704
+#: src/viewer/text/search.c:1698
 msgid "Regexp search"
 msgstr ""
 
-#: src/viewer/text/search.c:1705
+#: src/viewer/text/search.c:1699
 msgid "Extended regexp search"
 msgstr ""
 
-#: src/viewer/text/search.c:1707
+#: src/viewer/text/search.c:1701
 msgid "Case sensitive"
 msgstr ""
 
-#: src/viewer/text/search.c:1708
+#: src/viewer/text/search.c:1702
 msgid "Case insensitive"
 msgstr ""
 
-#: src/viewer/text/search.c:1732
+#: src/viewer/text/search.c:1726
 msgid "Search backward"
 msgstr "Зваротны пошук"
 
 #. name:
-#: src/viewer/text/search.c:1771
+#: src/viewer/text/search.c:1765
 #, fuzzy
 msgid "Search History"
 msgstr "Шукаць у г╕сторы╕"
@@ -8500,11 +8488,11 @@ msgstr "Пайц╕ па спасылцы"
 msgid "Enter link number"
 msgstr "Увядз╕це нумар спасылк╕"
 
-#: src/viewer/text/view.c:1631
+#: src/viewer/text/view.c:1628
 msgid "Save error"
 msgstr "Памылка захавання"
 
-#: src/viewer/text/view.c:1632
+#: src/viewer/text/view.c:1629
 msgid "Error writing to file"
 msgstr "Пасылка зап╕су ╝ файл"
 

@@ -85,7 +85,7 @@ detach_formatted(struct document_view *doc_view)
 /*! @a type == 0 -> PAGE_DOWN;
  * @a type == 1 -> DOWN */
 static void
-move_down(struct session *ses, struct document_view *doc_view, int type)
+move_down(struct session *ses, struct document_view *doc_view, int type, int overlap)
 {
 	int newpos;
 
@@ -94,7 +94,11 @@ move_down(struct session *ses, struct document_view *doc_view, int type)
 
 	assert(ses->navigate_mode == NAVIGATE_LINKWISE);	/* XXX: drop it at some time. --Zas */
 
-	newpos = doc_view->vs->y + doc_view->box.height;
+	if (overlap < doc_view->box.height)
+		newpos = doc_view->vs->y + doc_view->box.height - overlap;
+	else
+		newpos = doc_view->vs->y + doc_view->box.height;
+
 	if (newpos < doc_view->document->height)
 		doc_view->vs->y = newpos;
 
@@ -109,23 +113,41 @@ move_down(struct session *ses, struct document_view *doc_view, int type)
 	return;
 }
 
-enum frame_event_status
-move_page_down(struct session *ses, struct document_view *doc_view)
+static enum frame_event_status
+move_part_page_down(struct session *ses, struct document_view *doc_view, int overlap)
 {
 	int oldy = doc_view->vs->y;
 	int count = eat_kbd_repeat_count(ses);
 
 	ses->navigate_mode = NAVIGATE_LINKWISE;
 
-	do move_down(ses, doc_view, 0); while (--count > 0);
+	do move_down(ses, doc_view, 0, overlap); while (--count > 0);
 
 	return doc_view->vs->y == oldy ? FRAME_EVENT_OK : FRAME_EVENT_REFRESH;
+}
+
+enum frame_event_status
+move_page_down(struct session *ses, struct document_view *doc_view)
+{
+	return move_part_page_down(ses, doc_view, get_opt_int("document.browse.scrolling.vertical_overlap", ses));
+}
+
+enum frame_event_status
+move_half_page_down(struct session *ses, struct document_view *doc_view)
+{
+	return move_part_page_down(ses, doc_view, doc_view->box.height / 2);
+}
+
+enum frame_event_status
+move_current_top(struct session *ses, struct document_view *doc_view)
+{
+	return move_part_page_down(ses, doc_view, doc_view->box.height - ses->tab->y + 1);
 }
 
 /*! @a type == 0 -> PAGE_UP;
  * @a type == 1 -> UP */
 static void
-move_up(struct session *ses, struct document_view *doc_view, int type)
+move_up(struct session *ses, struct document_view *doc_view, int type, int overlap)
 {
 	assert(ses && doc_view && doc_view->vs);
 	if_assert_failed return;
@@ -134,7 +156,11 @@ move_up(struct session *ses, struct document_view *doc_view, int type)
 
 	if (doc_view->vs->y == 0) return;
 
-	doc_view->vs->y -= doc_view->box.height;
+	if (overlap < doc_view->box.height)
+		doc_view->vs->y -= (doc_view->box.height - overlap);
+	else
+		doc_view->vs->y -= doc_view->box.height;
+
 	int_lower_bound(&doc_view->vs->y, 0);
 
 	if (current_link_is_visible(doc_view))
@@ -149,18 +175,29 @@ move_up(struct session *ses, struct document_view *doc_view, int type)
 }
 
 enum frame_event_status
-move_page_up(struct session *ses, struct document_view *doc_view)
+move_part_page_up(struct session *ses, struct document_view *doc_view, int overlap)
 {
 	int oldy = doc_view->vs->y;
 	int count = eat_kbd_repeat_count(ses);
 
 	ses->navigate_mode = NAVIGATE_LINKWISE;
 
-	do move_up(ses, doc_view, 0); while (--count > 0);
+	do move_up(ses, doc_view, 0, overlap); while (--count > 0);
 
 	return doc_view->vs->y == oldy ? FRAME_EVENT_OK : FRAME_EVENT_REFRESH;
 }
 
+enum frame_event_status
+move_page_up(struct session *ses, struct document_view *doc_view)
+{
+	return move_part_page_up(ses, doc_view, get_opt_int("document.browse.scrolling.vertical_overlap", ses));
+}
+
+enum frame_event_status
+move_half_page_up(struct session *ses, struct document_view *doc_view)
+{
+	return move_part_page_up(ses, doc_view, doc_view->box.height / 2);
+}
 
 enum frame_event_status
 move_link(struct session *ses, struct document_view *doc_view, int direction,
@@ -180,7 +217,7 @@ move_link(struct session *ses, struct document_view *doc_view, int direction,
 	} else {
 		/* We only bother this option if there's some links
 		 * in document. */
-		wraparound = get_opt_bool("document.browse.links.wraparound");
+		wraparound = get_opt_bool("document.browse.links.wraparound", ses);
 	}
 
 	count = eat_kbd_repeat_count(ses);
@@ -216,9 +253,9 @@ move_link(struct session *ses, struct document_view *doc_view, int direction,
 		doc_view->vs->current_link = current_link;
 
 		if (direction > 0) {
-			move_down(ses, doc_view, 1);
+			move_down(ses, doc_view, 1, 0);
 		} else {
-			move_up(ses, doc_view, 1);
+			move_up(ses, doc_view, 1, 0);
 		}
 
 		if (current_link != wraparound_bound
@@ -250,9 +287,9 @@ move_link_dir(struct session *ses, struct document_view *doc_view, int dir_x, in
 
 		/* FIXME: This won't preserve the column! */
 		if (dir_y > 0)
-			move_down(ses, doc_view, 1);
+			move_down(ses, doc_view, 1, 0);
 		else if (dir_y < 0)
-			move_up(ses, doc_view, 1);
+			move_up(ses, doc_view, 1, 0);
 
 		if (dir_y && current_link != doc_view->vs->current_link) {
 			set_textarea(doc_view, -dir_y);
@@ -308,7 +345,7 @@ horizontal_scroll(struct session *ses, struct document_view *doc_view, int steps
 
 	x = doc_view->vs->x + steps;
 
-	if (get_opt_bool("document.browse.scrolling.horizontal_extended")) {
+	if (get_opt_bool("document.browse.scrolling.horizontal_extended", ses)) {
 		max = doc_view->document->width - 1;
 	} else {
 		max = int_max(doc_view->vs->x,
@@ -334,7 +371,7 @@ scroll_up(struct session *ses, struct document_view *doc_view)
 	int steps = eat_kbd_repeat_count(ses);
 
 	if (!steps)
-		steps = get_opt_int("document.browse.scrolling.vertical_step");
+		steps = get_opt_int("document.browse.scrolling.vertical_step", ses);
 
 	return vertical_scroll(ses, doc_view, -steps);
 }
@@ -345,7 +382,7 @@ scroll_down(struct session *ses, struct document_view *doc_view)
 	int steps = eat_kbd_repeat_count(ses);
 
 	if (!steps)
-		steps = get_opt_int("document.browse.scrolling.vertical_step");
+		steps = get_opt_int("document.browse.scrolling.vertical_step", ses);
 
 	return vertical_scroll(ses, doc_view, steps);
 }
@@ -356,7 +393,7 @@ scroll_left(struct session *ses, struct document_view *doc_view)
 	int steps = eat_kbd_repeat_count(ses);
 
 	if (!steps)
-		steps = get_opt_int("document.browse.scrolling.horizontal_step");
+		steps = get_opt_int("document.browse.scrolling.horizontal_step", ses);
 
 	return horizontal_scroll(ses, doc_view, -steps);
 }
@@ -367,7 +404,7 @@ scroll_right(struct session *ses, struct document_view *doc_view)
 	int steps = eat_kbd_repeat_count(ses);
 
 	if (!steps)
-		steps = get_opt_int("document.browse.scrolling.horizontal_step");
+		steps = get_opt_int("document.browse.scrolling.horizontal_step", ses);
 
 	return horizontal_scroll(ses, doc_view, steps);
 }
@@ -376,7 +413,7 @@ scroll_right(struct session *ses, struct document_view *doc_view)
 static enum frame_event_status
 scroll_mouse_up(struct session *ses, struct document_view *doc_view)
 {
-	int steps = get_opt_int("document.browse.scrolling.vertical_step");
+	int steps = get_opt_int("document.browse.scrolling.vertical_step", ses);
 
 	return vertical_scroll(ses, doc_view, -steps);
 }
@@ -384,7 +421,7 @@ scroll_mouse_up(struct session *ses, struct document_view *doc_view)
 static enum frame_event_status
 scroll_mouse_down(struct session *ses, struct document_view *doc_view)
 {
-	int steps = get_opt_int("document.browse.scrolling.vertical_step");
+	int steps = get_opt_int("document.browse.scrolling.vertical_step", ses);
 
 	return vertical_scroll(ses, doc_view, steps);
 }
@@ -392,7 +429,7 @@ scroll_mouse_down(struct session *ses, struct document_view *doc_view)
 static enum frame_event_status
 scroll_mouse_left(struct session *ses, struct document_view *doc_view)
 {
-	int steps = get_opt_int("document.browse.scrolling.horizontal_step");
+	int steps = get_opt_int("document.browse.scrolling.horizontal_step", ses);
 
 	return horizontal_scroll(ses, doc_view, -steps);
 }
@@ -400,7 +437,7 @@ scroll_mouse_left(struct session *ses, struct document_view *doc_view)
 static enum frame_event_status
 scroll_mouse_right(struct session *ses, struct document_view *doc_view)
 {
-	int steps = get_opt_int("document.browse.scrolling.horizontal_step");
+	int steps = get_opt_int("document.browse.scrolling.horizontal_step", ses);
 
 	return horizontal_scroll(ses, doc_view, steps);
 }
@@ -981,12 +1018,21 @@ try_mark_key(struct session *ses, struct document_view *doc_view,
 			break;
 	}
 
-	ses->kbdprefix.repeat_count = 0;
+	set_kbd_repeat_count(ses, 0);
 	ses->kbdprefix.mark = KP_MARK_NOTHING;
 
 	return FRAME_EVENT_REFRESH;
 }
 #endif
+
+void
+open_link_dialog(struct session *ses)
+{
+	input_dialog(ses->tab->term, NULL,
+		N_("Go to link"), N_("Enter link number"),
+		ses, NULL, MAX_STR_LEN, "", 0, 0, NULL,
+		(void (*)(void *, unsigned char *)) goto_link_symbol, NULL);
+}
 
 static enum frame_event_status
 try_prefix_key(struct session *ses, struct document_view *doc_view,
@@ -999,39 +1045,36 @@ try_prefix_key(struct session *ses, struct document_view *doc_view,
 	if (digit < 0 || digit > 9)
 		return FRAME_EVENT_IGNORED;
 
-	if (get_kbd_modifier(ev)
+	if ((get_kbd_modifier(ev) != KBD_MOD_NONE
+	     && (get_kbd_modifier(ev) & ~(KBD_MOD_ALT | KBD_MOD_CTRL))
+		 == KBD_MOD_NONE)
 	    || ses->kbdprefix.repeat_count /* The user has already begun
 	                                    * entering a prefix. */
 	    || !doc_opts->num_links_key
 	    || (doc_opts->num_links_key == 1 && !doc_opts->links_numbering)) {
+	        int old_count = ses->kbdprefix.repeat_count;
+		int new_count = old_count * 10 + digit;
+
 		/* Repeat count.
 		 * ses->kbdprefix.repeat_count is initialized to zero
 		 * the first time by init_session() calloc() call.
 		 * When used, it has to be reset to zero. */
 
-		/* Clear the highlighting for the previous partial prefix. */
-		if (ses->kbdprefix.repeat_count) draw_formatted(ses, 0);
-
-		ses->kbdprefix.repeat_count *= 10;
-		ses->kbdprefix.repeat_count += digit;
-
 		/* If too big, just restart from zero, so pressing
 		 * '0' six times or more will reset the count. */
 		if (ses->kbdprefix.repeat_count > 99999)
-			ses->kbdprefix.repeat_count = 0;
-		else if (ses->kbdprefix.repeat_count)
-			highlight_links_with_prefixes_that_start_with_n(
-			                           ses->tab->term, doc_view,
-			                           ses->kbdprefix.repeat_count);
+			new_count = 0;
+
+		set_kbd_repeat_count(ses, new_count);
 
 		return FRAME_EVENT_OK;
 	}
 
-	if (digit >= 1 && !get_kbd_modifier(ev)) {
+	if (digit >= 1 && get_kbd_modifier(ev) == KBD_MOD_NONE) {
 		int nlinks = document->nlinks, length;
 		unsigned char d[2] = { get_kbd_key(ev), 0 };
 
-		ses->kbdprefix.repeat_count = 0;
+		set_kbd_repeat_count(ses, 0);
 
 		if (!nlinks) return FRAME_EVENT_OK;
 
@@ -1048,28 +1091,6 @@ try_prefix_key(struct session *ses, struct document_view *doc_view,
 	}
 
 	return FRAME_EVENT_IGNORED;
-}
-
-static enum frame_event_status
-try_form_insert_mode(struct session *ses, struct document_view *doc_view,
-		     struct link *link, struct term_event *ev)
-{
-	enum frame_event_status status = FRAME_EVENT_IGNORED;
-	enum edit_action action_id;
-
-	if (!link_is_textinput(link))
-		return FRAME_EVENT_IGNORED;
-
-	action_id = kbd_action(KEYMAP_EDIT, ev, NULL);
-
-	if (ses->insert_mode == INSERT_MODE_OFF) {
-		if (action_id == ACT_EDIT_ENTER) {
-			ses->insert_mode = INSERT_MODE_ON;
-			status = FRAME_EVENT_REFRESH;
-		}
-	}
-
-	return status;
 }
 
 static enum frame_event_status
@@ -1101,10 +1122,6 @@ frame_ev_kbd(struct session *ses, struct document_view *doc_view, struct term_ev
 	struct link *link = get_current_link(doc_view);
 
 	if (link) {
-		status = try_form_insert_mode(ses, doc_view, link, ev);
-		if (status != FRAME_EVENT_IGNORED)
-			return status;
-
 		status = try_form_action(ses, doc_view, link, ev);
 		if (status != FRAME_EVENT_IGNORED)
 			return status;
@@ -1115,7 +1132,7 @@ frame_ev_kbd(struct session *ses, struct document_view *doc_view, struct term_ev
 	if (status != FRAME_EVENT_IGNORED)
 		return status;
 #endif
-	accesskey_priority = get_opt_int("document.browse.accesskey.priority");
+	accesskey_priority = get_opt_int("document.browse.accesskey.priority", ses);
 
 	if (accesskey_priority >= 2) {
 		status = try_document_key(ses, doc_view, ev);
@@ -1194,7 +1211,7 @@ frame_ev_mouse(struct session *ses, struct document_view *doc_view, struct term_
 	if (check_mouse_button(ev, B_LEFT)) {
 		/* Clicking the edge of screen will scroll the document. */
 
-		int scrollmargin = get_opt_int("document.browse.scrolling.margin");
+		int scrollmargin = get_opt_int("document.browse.scrolling.margin", ses);
 
 		/* XXX: This is code duplication with kbd handlers. But
 		 * repeatcount-free here. */
@@ -1426,7 +1443,7 @@ static void
 try_typeahead(struct session *ses, struct document_view *doc_view,
               struct term_event *ev, enum main_action action_id)
 {
-	switch (get_opt_int("document.browse.search.typeahead")) {
+	switch (get_opt_int("document.browse.search.typeahead", ses)) {
 		case 0:
 			return;
 		case 1:
@@ -1444,6 +1461,31 @@ try_typeahead(struct session *ses, struct document_view *doc_view,
 	/* Cross your fingers -- I'm just asking
 	 * for an infinite loop! -- Miciah */
 	term_send_event(ses->tab->term, ev);
+}
+
+/** See whether the BFU (in particular the menu system) is interested in
+ * the event. */
+static enum frame_event_status
+try_menu(struct session *ses, struct term_event *ev)
+{
+	struct window *win;
+
+	get_kbd_modifier(ev) &= ~KBD_MOD_ALT;
+	activate_bfu_technology(ses, -1);
+	win = ses->tab->term->windows.next;
+	win->handler(win, ev);
+	if (ses->tab->term->windows.next == win) {
+		deselect_mainmenu(win->term, win->data);
+		print_screen_status(ses);
+	}
+	if (!tabs_are_on_top(ses->tab->term)) {
+		/* The event opened a menu; we're done. */
+		return FRAME_EVENT_OK;
+	}
+	/* Otherwise, the event still needs to be handled. */
+	get_kbd_modifier(ev) |= KBD_MOD_ALT;
+
+	return FRAME_EVENT_IGNORED;
 }
 
 /** @returns the session if event cleanup should be done or NULL if no
@@ -1487,23 +1529,14 @@ quit:
 
 	/* Ctrl-Alt-F should not open the File menu like Alt-f does.  */
 	if (check_kbd_modifier(ev, KBD_MOD_ALT)) {
-		struct window *win;
-
-		get_kbd_modifier(ev) &= ~KBD_MOD_ALT;
-		activate_bfu_technology(ses, -1);
-		win = ses->tab->term->windows.next;
-		win->handler(win, ev);
-		if (ses->tab->term->windows.next == win) {
-			deselect_mainmenu(win->term, win->data);
-			print_screen_status(ses);
-		}
-		if (ses->tab != ses->tab->term->windows.next)
+		if (try_menu(ses, ev) != FRAME_EVENT_IGNORED) {
+			/* The BFU ate the key! */
 			return NULL;
-		get_kbd_modifier(ev) |= KBD_MOD_ALT;
+		}
 
 		if (doc_view
 		    && get_opt_int("document.browse.accesskey"
-				   ".priority") <= 0
+				   ".priority", ses) <= 0
 		    && try_document_key(ses, doc_view, ev)
 		       == FRAME_EVENT_REFRESH) {
 			/* The document ate the key! */
@@ -1542,7 +1575,7 @@ send_event(struct session *ses, struct term_event *ev)
 #endif /* CONFIG_MOUSE */
 
 	/* @ses may disappear ie. in close_tab() */
-	if (ses) ses->kbdprefix.repeat_count = 0;
+	if (ses) set_kbd_repeat_count(ses, 0);
 }
 
 enum frame_event_status

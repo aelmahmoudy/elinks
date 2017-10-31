@@ -18,6 +18,11 @@
 #include <wctype.h>
 #endif
 
+#ifdef HAVE_ICONV
+#include <errno.h>
+#include <iconv.h>
+#endif
+
 #include "elinks.h"
 
 #include "document/options.h"
@@ -25,6 +30,7 @@
 #include "util/conv.h"
 #include "util/error.h"
 #include "util/fastfind.h"
+#include "util/hash.h"
 #include "util/memory.h"
 #include "util/string.h"
 
@@ -63,6 +69,9 @@ struct codepage_desc {
  	 * above, and the rest are listed here in @table.  This table
  	 * is not used for translating from the codepage to Unicode.  */
 	const struct table_entry *table;
+
+	/* Whether use iconv for translation */
+	unsigned int iconv:1;
 };
 
 #include "intl/codepage.inc"
@@ -118,6 +127,10 @@ static const char strings[256][2] = {
 	"\370", "\371", "\372", "\373", "\374", "\375", "\376", "\377",
 };
 
+#ifdef HAVE_ICONV
+static iconv_t iconv_cd = (iconv_t)-1;
+#endif
+
 static void
 free_translation_table(struct conv_table *p)
 {
@@ -153,6 +166,7 @@ new_translation_table(struct conv_table *p)
 		p[i].t = 0;
 	       	p[i].u.str = no_str;
 	}
+	p->iconv_cp = -1;
 }
 
 #define BIN_SEARCH(table, entry, entries, key, result)					\
@@ -282,7 +296,7 @@ int
 strlen_utf8(unsigned char **str)
 {
 	unsigned char *s = *str;
-	unsigned char *end = strchr(s, '\0');
+	unsigned char *end = strchr((const char *)s, '\0');
 	int x;
 	int len;
 
@@ -320,7 +334,7 @@ utf8_char2cells(unsigned char *utf8_char, unsigned char *end)
 	unicode_val_T u;
 
 	if (end == NULL)
-		end = strchr(utf8_char, '\0');
+		end = strchr((const char *)utf8_char, '\0');
 
 	if(!utf8_char || !end)
 		return -1;
@@ -338,7 +352,7 @@ utf8_ptr2cells(unsigned char *string, unsigned char *end)
 	int charlen, cell, cells = 0;
 
 	if (end == NULL)
-		end = strchr(string, '\0');
+		end = strchr((const char *)string, '\0');
 
 	if(!string || !end)
 		return -1;
@@ -366,7 +380,7 @@ utf8_ptr2chars(unsigned char *string, unsigned char *end)
 	int charlen, chars = 0;
 
 	if (end == NULL)
-		end = strchr(string, '\0');
+		end = strchr((const char *)string, '\0');
 
 	if(!string || !end)
 		return -1;
@@ -395,7 +409,7 @@ utf8_cells2bytes(unsigned char *string, int max_cells, unsigned char *end)
 	assert(max_cells>=0);
 
 	if (end == NULL)
-		end = strchr(string, '\0');
+		end = strchr((const char *)string, '\0');
 
 	if(!string || !end)
 		return -1;
@@ -441,7 +455,7 @@ utf8_step_forward(unsigned char *string, unsigned char *end,
 	assert(max >= 0);
 	if_assert_failed goto invalid_arg;
 	if (end == NULL)
-		end = strchr(string, '\0');
+		end = strchr((const char *)string, '\0');
 
 	switch (way) {
 	case UTF8_STEP_CHARACTERS:
@@ -591,12 +605,13 @@ invalid_arg:
  * libc version of wcwidth, and instead use a hardcoded mapping.
  *
  * @return	2 for double-width glyph, 1 for others.
- * 		TODO: May be extended to return 0 for zero-width glyphs
- * 		(like composing, maybe unprintable too).
+ * 		0 for unprintable glyphs (like 0x200e: "LEFT-TO-RIGHT MARK")
  */
 NONSTATIC_INLINE int
 unicode_to_cell(unicode_val_T c)
 {
+	if (c == 0x200e || c == 0x200f)
+		return 0;
 	if (c >= 0x1100
 		&& (c <= 0x115f			/* Hangul Jamo */
 		|| c == 0x2329
@@ -775,6 +790,68 @@ cp_to_unicode(int codepage, unsigned char **string, const unsigned char *end)
 }
 
 
+#ifdef CONFIG_COMBINE
+unicode_val_T last_combined = UCS_BEGIN_COMBINED - 1;
+unicode_val_T **combined;
+struct hash *combined_hash;
+
+unicode_val_T
+get_combined(unicode_val_T *data, int length)
+{
+	struct hash_item *item;
+	unicode_val_T *key;
+	int i, indeks;
+
+	assert(length >= 1 && length <= UCS_MAX_LENGTH_COMBINED);
+	if_assert_failed return UCS_NO_CHAR;
+
+	if (!combined_hash) combined_hash = init_hash8();
+	if (!combined_hash) return UCS_NO_CHAR;
+	item = get_hash_item(combined_hash, (unsigned char *)data, length * sizeof(*data));
+
+	if (item) return (unicode_val_T)(long)item->value;
+	if (last_combined >= UCS_END_COMBINED) return UCS_NO_CHAR;
+
+	key = mem_alloc((length + 1) * sizeof(*key));
+	if (!key) return UCS_NO_CHAR;
+	for (i = 0; i < length; i++)
+		key[i] = data[i];
+	key[i] = UCS_END_COMBINED;
+
+	last_combined++;
+	indeks = last_combined - UCS_BEGIN_COMBINED;
+
+	combined = mem_realloc(combined, sizeof(*combined) * (indeks + 1));
+	if (!combined) {
+		mem_free(key);
+		last_combined--;
+		return UCS_NO_CHAR;
+	}
+	combined[indeks] = key;
+	item = add_hash_item(combined_hash, (unsigned char *)key,
+			     length * sizeof(*data), (void *)(long)(last_combined));
+	if (!item) {
+		last_combined--;
+		mem_free(key);
+		return UCS_NO_CHAR;
+	}
+	return last_combined;
+}
+
+void
+free_combined()
+{
+	int i, end = last_combined - UCS_BEGIN_COMBINED + 1; 
+
+	if (combined_hash)
+		free_hash(&combined_hash);
+	for (i = 0; i < end; i++)
+		mem_free(combined[i]);
+	mem_free_if(combined);
+}
+#endif /* CONFIG_COMBINE */
+
+
 static void
 add_utf8(struct conv_table *ct, unicode_val_T u, const unsigned char *str)
 {
@@ -884,6 +961,12 @@ free_conv_table(void)
 		first = 0;
 	}
 	new_translation_table(table);
+#ifdef HAVE_ICONV
+	if (iconv_cd != (iconv_t)-1) {
+		iconv_close(iconv_cd);
+		iconv_cd = (iconv_t)-1;
+	}
+#endif
 }
 
 
@@ -899,10 +982,22 @@ get_translation_table(int from, int to)
 		memset(table, 0, sizeof(table));
 		first = 0;
 	}
+
+	if (codepages[from].iconv) {
+		struct conv_table *table2 = get_translation_table_to_utf8(34);
+
+		if (table2) table2->iconv_cp = from;
+		return table2;
+	}
+
 	if (/*from == to ||*/ from == -1 || to == -1)
 		return NULL;
-	if (is_cp_ptr_utf8(&codepages[to]))
-		return get_translation_table_to_utf8(from);
+	if (is_cp_ptr_utf8(&codepages[to])) {
+		struct conv_table *table2 = get_translation_table_to_utf8(from);
+
+		if (table2) table2->iconv_cp = -1;
+		return table2;
+	}
 	if (from == lfr && to == lto)
 		return table;
 	lfr = from;
@@ -1007,9 +1102,11 @@ get_entity_string(const unsigned char *str, const int strlen, int encoding)
 			           will go in [0] table */
 	static struct entity_cache entity_cache[ENTITY_CACHE_MAXLEN][ENTITY_CACHE_SIZE];
 	static unsigned int nb_entity_cache[ENTITY_CACHE_MAXLEN];
-	static int first_time = 1;
 	unsigned int slen = 0;
 	const unsigned char *result = NULL;
+
+	/* Note that an object of static storage duration is automatically
+	 * initialised to zero in C.  */
 
 	if (strlen <= 0) return NULL;
 
@@ -1019,11 +1116,6 @@ get_entity_string(const unsigned char *str, const int strlen, int encoding)
 	if (is_cp_ptr_utf8(&codepages[encoding]))
 		goto skip;
 #endif /* CONFIG_UTF8 */
-
-	if (first_time) {
-		memset(&nb_entity_cache, 0, ENTITY_CACHE_MAXLEN * sizeof(unsigned int));
-		first_time = 0;
-	}
 
 	/* Check if cached. A test on many websites (freshmeat.net + whole ELinks website
 	 * + google + slashdot + websites that result from a search for test on google,
@@ -1177,7 +1269,7 @@ end:
 
 unsigned char *
 convert_string(struct conv_table *convert_table,
-	       unsigned char *chars, int charslen, int cp,
+	       unsigned char *chars2, int charslen2, int cp,
 	       enum convert_string_mode mode, int *length,
 	       void (*callback)(void *data, unsigned char *buf, int buflen),
 	       void *callback_data)
@@ -1185,6 +1277,19 @@ convert_string(struct conv_table *convert_table,
 	unsigned char *buffer;
 	int bufferpos = 0;
 	int charspos = 0;
+	unsigned char *chars = chars2;
+	int charslen = charslen2;
+
+#ifdef HAVE_ICONV
+	static char iconv_input[256];
+	static char iconv_output[256 * 8];
+	static size_t iconv_offset;
+	static int iconv_cp;
+	static size_t iconv_inleft;
+	size_t iconv_outleft = 256 * 8;
+	int loop = 0;
+	int is_iconv = 0;
+	int chars_offset = 0;
 
 	if (!convert_table && !memchr(chars, '&', charslen)) {
 		if (callback) {
@@ -1195,13 +1300,82 @@ convert_string(struct conv_table *convert_table,
 		}
 	}
 
+	if (cp >= 0) {
+		if (convert_table && convert_table->iconv_cp > 0) {
+			is_iconv = 1;
+			cp = convert_table->iconv_cp;
+		} else {
+			is_iconv = codepages[cp & ~SYSTEM_CHARSET_FLAG].iconv;
+		}
+	}
+#endif
+
 	/* Buffer allocation */
 
 	buffer = mem_alloc(ALLOC_GR + 1 /* trailing \0 */);
 	if (!buffer) return NULL;
 
+#ifdef HAVE_ICONV
+	if (is_iconv) {
+		int v;
+		size_t before, to_copy;
+		char *outp, *inp;
+
+		if (iconv_cd >= 0) {
+			if (cp != iconv_cp) {
+				iconv_close(iconv_cd);
+				iconv_cd = (iconv_t)-1;
+			}
+		}
+		if (iconv_cd == (iconv_t)-1) {
+			iconv_offset = 0;
+			iconv_cd = iconv_open("utf-8", get_cp_mime_name(cp));
+			if (iconv_cd == (iconv_t)-1) {
+				mem_free(buffer);
+				return NULL;
+			}
+			iconv_cp = cp;
+		}
+repeat:
+		to_copy = charslen2 - chars_offset;
+		if (to_copy > 256 - iconv_offset) to_copy = 256 - iconv_offset;
+		memcpy(iconv_input + iconv_offset, chars2 + chars_offset, to_copy);
+		iconv_outleft = 256 * 8;
+		iconv_inleft = iconv_offset + to_copy;
+		inp = iconv_input;
+		outp = iconv_output;
+		before = iconv_inleft;
+
+		v = iconv(iconv_cd, &inp, &iconv_inleft, &outp, &iconv_outleft);
+		chars_offset += before - iconv_inleft;
+		charslen = 256 * 8 - iconv_outleft;
+
+		chars = (unsigned char *)iconv_output;
+		charspos = 0;
+
+		if (v == -1) {
+			switch (errno) {
+			case EINVAL:
+				memcpy(iconv_input, inp, iconv_inleft);
+				iconv_offset = iconv_inleft;
+				break;
+			case EILSEQ:
+				loop = 0;
+				goto out;
+				break;
+			default:
+				iconv_offset = 0;
+			}
+		} else {
+			iconv_offset = 0;
+		}
+		
+		loop = chars_offset < charslen2;
+	}
+#endif
 	/* Iterate ;-) */
 
+out:
 	while (charspos < charslen) {
 		const unsigned char *translit;
 
@@ -1272,7 +1446,7 @@ convert_string(struct conv_table *convert_table,
 		}
 
 		while (*translit) {
-			unsigned char *new;
+			unsigned char *new_;
 
 			buffer[bufferpos++] = *(translit++);
 flush:
@@ -1283,17 +1457,20 @@ flush:
 				callback(callback_data, buffer, bufferpos);
 				bufferpos = 0;
 			} else {
-				new = mem_realloc(buffer, bufferpos + ALLOC_GR);
-				if (!new) {
+				new_ = mem_realloc(buffer, bufferpos + ALLOC_GR);
+				if (!new_) {
 					mem_free(buffer);
 					return NULL;
 				}
-				buffer = new;
+				buffer = new_;
 			}
 		}
 #undef PUTC
 	}
 
+#ifdef HAVE_ICONV
+	if (loop) goto repeat;
+#endif
 	/* Say bye */
 
 	buffer[bufferpos] = 0;
@@ -1482,4 +1659,15 @@ is_cp_utf8(int cp_index)
 {
 	cp_index &= ~SYSTEM_CHARSET_FLAG;
 	return is_cp_ptr_utf8(&codepages[cp_index]);
+}
+
+/* This function will be used by the xhtml parser. */
+const uint16_t *
+get_cp_highhalf(const unsigned char *name)
+{
+	int cp = get_cp_index(name);
+
+	if (cp < 0) return NULL;
+	cp &= ~SYSTEM_CHARSET_FLAG;
+	return codepages[cp].highhalf;
 }

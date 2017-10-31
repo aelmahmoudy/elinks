@@ -22,6 +22,11 @@ enum term_event_type {
 	EVENT_ABORT,
 };
 
+struct term_event_size {
+	int width, height;
+};
+
+
 /** An event received from a terminal.  This type can be changed
  * without breaking interlink compatibility.  */
 struct term_event {
@@ -35,9 +40,7 @@ struct term_event {
 		struct term_event_keyboard keyboard;
 
 		/** ::EVENT_INIT, ::EVENT_RESIZE, ::EVENT_REDRAW */
-		struct term_event_size {
-			int width, height;
-		} size;
+		struct term_event_size size;
 	} info;
 };
 
@@ -181,7 +184,7 @@ void in_term(struct terminal *);
 #define get_kbd_modifier(event)		(kbd_get_modifier(&(event)->info.keyboard))
 #define check_kbd_modifier(event, mod)	(kbd_modifier_is(&(event)->info.keyboard, (mod)))
 
-#define check_kbd_textinput_key(event)	(get_kbd_key(event) >= ' ' && check_kbd_modifier(event, KBD_MOD_NONE))
+#define check_kbd_textinput_key(event)	(get_kbd_key(event) >= ' ' && (check_kbd_modifier(event, KBD_MOD_NONE) || check_kbd_modifier(event, KBD_MOD_PASTE)))
 #define check_kbd_label_key(event)	(get_kbd_key(event) > ' ' && (check_kbd_modifier(event, KBD_MOD_NONE) || check_kbd_modifier(event, KBD_MOD_ALT)))
 /** @} */
 

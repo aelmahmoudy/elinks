@@ -7,11 +7,11 @@ OBJS-$(CONFIG_MIMETYPES)	+= mimetypes.o
 OBJS = common.o default.o
 
 TEST_PROGS = \
- mailcap-cache
+ mailcap-cache$(EXEEXT)
 
 # The dependencies are a bit funny here! I don't know why. Just remember to
 # make clean before making the test. --jonas
-mailcap-cache.o: mailcap.c
+mailcap-cache.o: $(top_srcdir)/src/mime/backend/mailcap.c
 	$(call cmd,compile,-DTEST_MAILCAP)
 
 TESTDEPS = \

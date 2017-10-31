@@ -344,6 +344,12 @@ static union option_info config_options_info[] = {
 		"the order in which links should receive focus when using the "
 		"keyboard to navigate the document.")),
 
+	INIT_OPT_STRING("document.browse.links", N_("Specify link label key"),
+		"label_key", 0, "0123456789",
+		N_("Default is 0123456789, which is standard numeric labeling. "
+		"Ascii based strings like gfdsahjkl;trewqyuiopvcxznm can also "
+		"be used.")),
+
 	INIT_OPT_BOOL("document.browse.links", N_("Missing fragment reporting"),
 		"missing_fragment", 0, 1,
 		N_("Open a message box when document has no tag with given "
@@ -396,6 +402,11 @@ static union option_info config_options_info[] = {
 		"vertical_step", 0, 1, 9999, 2,
 		N_("Number of lines to scroll when a key bound to scroll-up "
 		"or scroll-down is pressed and no prefix was given.")),
+
+	INIT_OPT_INT("document.browse.scrolling", N_("Vertical overlap"),
+		"vertical_overlap", 0, 0, 10, 0,
+		N_("Number of overlapping lines between the new page displayed "
+		"and the previous one when scrolling one page up or down.")),
 
 
 	INIT_OPT_TREE("document.browse", N_("Searching"),
@@ -469,6 +480,10 @@ static union option_info config_options_info[] = {
 		"before refreshing. If set to zero the document refresh time "
 		"is used unchanged. It can fix going back in history for some "
 		"sites that use refreshing with zero values.")),
+
+	INIT_OPT_BOOL("document.browse", N_("Show meta refresh link"),
+		"show_refresh_link", 0, 1,
+		N_("Whether to show meta refresh link.")),
 
 	INIT_OPT_BOOL("document.browse", N_("Tables navigation order"),
 		"table_move_order", 0, 0,
@@ -879,20 +894,22 @@ static union option_info config_options_info[] = {
 	 * 4 (TERM_FREEBSD) outputs characters in the 0x80...0x9F
 	 *   range, which FreeBSD 4.0 (but not 5.0) treated as
 	 *   graphical.
+	 * 5 (TERM_FBTERM)
 	 *
 	 * When UTF-8 I/O is enabled, ELinks outputs (almost) the same
 	 * characters as above but encodes them in UTF-8 and does not
 	 * switch charsets.  So, it will work in any terminal that
 	 * understands UTF-8 and has the characters in its font.  */
 	INIT_OPT_INT("terminal._template_", N_("Type"),
-		"type", 0, 0, 4, 0,
+		"type", 0, 0, 5, 0,
 		N_("Terminal type; matters mostly only when drawing frames "
 		"and dialog box borders:\n"
 		"0 is dumb terminal type, ASCII art\n"
 		"1 is VT100, simple but portable\n"
 		"2 is Linux, you get double frames and other goodies\n"
 		"3 is KOI-8\n"
-		"4 is FreeBSD")),
+		"4 is FreeBSD\n"
+		"5 is fbterm")),
 
 	INIT_OPT_BOOL("terminal._template_", N_("Always encode xterm title in ISO-8859-1"),
 		"latin1_title", 0, 1,
@@ -925,6 +942,13 @@ static union option_info config_options_info[] = {
 		"Note that currently, only the subset of UTF-8 according to "
 		"terminal codepage is used. ELinks ignores this option "
 		"if the terminal codepage is UTF-8.")),
+
+#ifdef CONFIG_COMBINE
+	INIT_OPT_BOOL("terminal._template_", N_("Combining characters"),
+		"combine", 0, 0,
+		N_("Enable combining characters. It works only with "
+		"the xterm in UTF-8 mode.")),
+#endif
 
 	INIT_OPT_BOOL("terminal._template_", N_("Restrict frames in cp850/852"),
 		"restrict_852", 0, 0,
@@ -971,6 +995,10 @@ static union option_info config_options_info[] = {
 		"bright background you might experience contrast problems). "
 		"Note that this option makes sense only when colors are "
 		"enabled.")),
+
+	INIT_OPT_BOOL("terminal._template_", N_("Italic"),
+		"italic", 0, 0,
+		N_("If we should use italics.")),
 
 	INIT_OPT_BOOL("terminal._template_", N_("Underline"),
 		"underline", 0, 0,
@@ -1186,9 +1214,14 @@ static union option_info config_options_info[] = {
 		"status",
 		N_("Status bar colors.")),
 
+	INIT_OPT_COLORS(".status", N_("Status bar show ip"),
+		"showip-text", "black", "white", "black", "white",
+		N_("Status bar show ip text colors.")),
+
 	INIT_OPT_COLORS(".status", N_("Generic status bar"),
 		"status-bar", "black", "white", "black", "white",
 		N_("Generic status bar colors.")),
+
 
 	INIT_OPT_COLORS(".status", N_("Status bar text"),
 		"status-text", "black", "white", "black", "white",
