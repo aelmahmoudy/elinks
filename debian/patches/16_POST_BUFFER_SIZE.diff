@@ -1,0 +1,16 @@
+#elinks on freenode IRC server:
+11:14 >witekfl< AnAnt: This is rather a workaround. The problem is that ELinks uses SSL sockets in blocking way.
+
+Index: elinks/src/protocol/http/http.c
+===================================================================
+--- elinks.orig/src/protocol/http/http.c	2017-11-01 02:14:30.575843058 +0100
++++ elinks/src/protocol/http/http.c	2017-11-01 02:14:30.571843041 +0100
+@@ -618,7 +618,7 @@
+ #endif
+ }
+ 
+-#define POST_BUFFER_SIZE 16384
++#define POST_BUFFER_SIZE 4096
+ 
+ static void
+ send_more_post_data(struct socket *socket)
