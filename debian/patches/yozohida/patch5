@@ -1,0 +1,126 @@
+Provide different color for text areas in insert mode.
+The color is controlled by
+
+  document.browse.links.active_link.insert_mode_colors.background
+  document.browse.links.active_link.insert_mode_colors.text
+
+Also avoid overloading local variable "i" in get_current_link().
+By: yozohida@gmail.com
+---
+ src/config/options.inc  |   12 ++++++++++++
+ src/document/document.c |    2 ++
+ src/document/options.c  |    2 ++
+ src/document/options.h  |    1 +
+ src/viewer/text/link.c  |   17 ++++++++++++-----
+ 5 files changed, 29 insertions(+), 5 deletions(-)
+
+Index: elinks/src/config/options.inc
+===================================================================
+--- elinks.orig/src/config/options.inc	2017-11-01 03:28:49.753696605 +0100
++++ elinks/src/config/options.inc	2017-11-01 03:28:59.000000000 +0100
+@@ -294,6 +294,18 @@
+ 		"text", 0, "black",
+ 		N_("Default text color.")),
+ 
++	INIT_OPT_TREE("document.browse.links.active_link", N_("Insert mode colors"),
++		"insert_mode_colors", 0,
++		N_("Insert mode colors.")),
++
++	INIT_OPT_COLOR("document.browse.links.active_link.insert_mode_colors", N_("Background color for text field in insert mode"),
++		"background", 0, "#0000ff",
++		N_("Background color for text field in insert mode")),
++
++	INIT_OPT_COLOR("document.browse.links.active_link.insert_mode_colors", N_("Text color for text field in insert mode"),
++		"text", 0, "black",
++		N_("Text color for text field in insert mode.")),
++
+ 	INIT_OPT_BOOL("document.browse.links.active_link", N_("Enable color"),
+ 		"enable_color", 0, 0,
+ 		N_("Enable use of the active link background and text color "
+Index: elinks/src/document/document.c
+===================================================================
+--- elinks.orig/src/document/document.c	2017-11-01 03:28:49.753696605 +0100
++++ elinks/src/document/document.c	2017-11-01 03:28:49.753696605 +0100
+@@ -312,6 +312,8 @@
+ 	memset(&active_link, 0, sizeof(active_link));	/* Safer. */
+ 	active_link.color.foreground = get_opt_color("document.browse.links.active_link.colors.text", ses);
+ 	active_link.color.background = get_opt_color("document.browse.links.active_link.colors.background", ses);
++	active_link.insert_mode_color.foreground = get_opt_color("document.browse.links.active_link.insert_mode_colors.text", ses);
++	active_link.insert_mode_color.background = get_opt_color("document.browse.links.active_link.insert_mode_colors.background", ses);
+ 	active_link.enable_color = get_opt_bool("document.browse.links.active_link.enable_color", ses);
+ 	active_link.invert = get_opt_bool("document.browse.links.active_link.invert", ses);
+ 	active_link.underline = get_opt_bool("document.browse.links.active_link.underline", ses);
+Index: elinks/src/document/options.c
+===================================================================
+--- elinks.orig/src/document/options.c	2017-11-01 03:28:49.753696605 +0100
++++ elinks/src/document/options.c	2017-11-01 03:28:59.000000000 +0100
+@@ -50,6 +50,8 @@
+ 
+ 	doo->active_link.color.foreground = get_opt_color("document.browse.links.active_link.colors.text", ses);
+ 	doo->active_link.color.background = get_opt_color("document.browse.links.active_link.colors.background", ses);
++	doo->active_link.insert_mode_color.foreground = get_opt_color("document.browse.links.active_link.insert_mode_colors.text", ses);
++	doo->active_link.insert_mode_color.background = get_opt_color("document.browse.links.active_link.insert_mode_colors.background", ses);
+ 
+ 	if (get_opt_bool("document.colors.increase_contrast", ses))
+ 		doo->color_flags |= COLOR_INCREASE_CONTRAST;
+Index: elinks/src/document/options.h
+===================================================================
+--- elinks.orig/src/document/options.h	2017-11-01 03:28:49.753696605 +0100
++++ elinks/src/document/options.h	2017-11-01 03:28:59.000000000 +0100
+@@ -20,6 +20,7 @@
+ 	unsigned int bold:1;
+ 	unsigned int invert:1;
+ 	struct active_link_options_colors color;
++	struct active_link_options_colors insert_mode_color;
+ };
+ 
+ /** This mostly acts as a option cache so rendering will be faster. However it
+Index: elinks/src/viewer/text/link.c
+===================================================================
+--- elinks.orig/src/viewer/text/link.c	2017-11-01 03:28:49.753696605 +0100
++++ elinks/src/viewer/text/link.c	2017-11-01 03:35:17.127247562 +0100
+@@ -166,7 +166,7 @@
+ /** Initialise a static template character with the colour and attributes
+  * appropriate for an active link and return that character. */
+ static inline struct screen_char *
+-init_link_drawing(struct document_view *doc_view, struct link *link, int invert)
++init_link_drawing(struct document_view *doc_view, struct link *link, int invert, int input)
+ {
+ 	struct document_options *doc_opts;
+ 	static struct screen_char template_;
+@@ -188,8 +188,13 @@
+ 		template_.attr |= SCREEN_ATTR_BOLD;
+ 
+ 	if (doc_opts->active_link.enable_color) {
+-		colors.foreground = doc_opts->active_link.color.foreground;
+-		colors.background = doc_opts->active_link.color.background;
++		if (input) {
++			colors.foreground = doc_opts->active_link.insert_mode_color.foreground;
++			colors.background = doc_opts->active_link.insert_mode_color.background;
++		} else {
++			colors.foreground = doc_opts->active_link.color.foreground;
++			colors.background = doc_opts->active_link.color.background;
++		}
+ 	} else {
+ 		colors.foreground = link->color.foreground;
+ 		colors.background = link->color.background;
+@@ -232,6 +237,7 @@
+ 	struct link *link;
+ 	int cursor_offset;
+ 	int xpos, ypos;
++	int invert, input;
+ 	int i;
+ 
+ 	assert(term && doc_view && doc_view->vs);
+@@ -243,8 +249,9 @@
+ 	link = get_current_link(doc_view);
+ 	if (!link) return;
+ 
+-	i = !link_is_textinput(link) || ses->insert_mode == INSERT_MODE_OFF;
+-	template_ = init_link_drawing(doc_view, link, i);
++	invert = !link_is_textinput(link) || ses->insert_mode == INSERT_MODE_OFF;
++	input = ses->insert_mode == INSERT_MODE_ON;
++	template_ = init_link_drawing(doc_view, link, invert, input);
+ 	if (!template_) return;
+ 
+ 	xpos = doc_view->box.x - doc_view->vs->x;

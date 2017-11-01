@@ -1,0 +1,16 @@
+Do not underline forms (unless selected).
+By: yozohida@gmail.com
+---
+ src/document/html/renderer.c |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+--- a/src/document/html/renderer.c
++++ b/src/document/html/renderer.c
+@@ -357,6 +357,7 @@
+ 		schar_cache.attr ^= SCREEN_ATTR_UNSEARCHABLE;
+ 	}
+ 	if (link_state != LINK_STATE_NONE
++	    && !format.form
+ 	    && html_context->options->underline_links) {
+ 		schar_cache.attr |= SCREEN_ATTR_UNDERLINE;
+ 	}

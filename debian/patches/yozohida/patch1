@@ -1,0 +1,31 @@
+commit 5fd894c0d32b36660b2bbc3c17799eb3f872e24b
+Author: Yozo Hida <yozo@cs.berkeley.edu>
+Date:   Fri May 1 15:39:30 2009 -0400
+
+    Underline links even in numbered links mode.
+
+--- a/src/document/html/renderer.c
++++ b/src/document/html/renderer.c
+@@ -349,11 +349,6 @@
+ 		copy_struct(&ta_cache, &format.style);
+ 		struct text_style final_style = format.style;
+ 
+-		if (link_state != LINK_STATE_NONE
+-		    && html_context->options->underline_links) {
+-			final_style.attr |= AT_UNDERLINE;
+-		}
+-
+ 		get_screen_char_template(&schar_cache, html_context->options, final_style);
+ 	}
+ 
+@@ -361,6 +356,10 @@
+ 	    ^ !!renderer_context.nosearchable) {
+ 		schar_cache.attr ^= SCREEN_ATTR_UNSEARCHABLE;
+ 	}
++	if (link_state != LINK_STATE_NONE
++	    && html_context->options->underline_links) {
++		schar_cache.attr |= SCREEN_ATTR_UNDERLINE;
++	}
+ 
+ 	return &schar_cache;
+ }

@@ -1,0 +1,128 @@
+Allow link number colors to be changed.
+These settings are specified by
+
+  document.colors.link_number
+  document.colors.use_link_number_color
+
+The latter setting determines whether the color is used when document
+colors are being used.
+
+See bug #1050.
+By: yozohida@gmail.com
+---
+ src/config/options.inc       |    9 +++++++++
+ src/document/html/parser.c   |    1 +
+ src/document/html/parser.h   |    1 +
+ src/document/html/renderer.c |    6 ++++++
+ src/document/options.c       |    2 ++
+ src/document/options.h       |    3 +++
+ 6 files changed, 22 insertions(+), 0 deletions(-)
+
+Index: elinks/src/config/options.inc
+===================================================================
+--- elinks.orig/src/config/options.inc	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/config/options.inc	2017-11-01 02:49:18.792203807 +0100
+@@ -621,6 +621,15 @@
+ 		"\n"
+ 		"See document.browse.links.color_dirs option.")),
+ 
++	INIT_OPT_BOOL("document.colors", N_("Use link number color"),
++	        "use_link_number_color", 0, 0,
++		N_("Whether to use link number color even when colors "
++		"specified by the document are used.")),
++
++	INIT_OPT_COLOR("document.colors", N_("Link number color"),
++		"link_number", 0, "#0000ff",
++		N_("Default link number color.")),
++
+ 	/* Compatibility alias: added by jonas at 2005-05-31, 0.11.CVS. */
+ 	INIT_OPT_ALIAS("document.colors", "allow_dark_on_black", OPT_ALIAS_NEGATE,
+ 		"document.colors.increase_contrast"),
+Index: elinks/src/document/html/parser.c
+===================================================================
+--- elinks.orig/src/document/html/parser.c	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/document/html/parser.c	2017-11-01 02:49:18.792203807 +0100
+@@ -799,6 +799,7 @@
+ 	format.color.bookmark_link = options->default_color.bookmark_link;
+ #endif
+ 	format.color.image_link = options->default_color.image_link;
++	format.color.link_number = options->default_color.link_number;
+ 
+ 	par_format.align = ALIGN_LEFT;
+ 	par_format.leftmargin = options->margin;
+Index: elinks/src/document/html/parser.h
+===================================================================
+--- elinks.orig/src/document/html/parser.h	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/document/html/parser.h	2017-11-01 02:49:18.792203807 +0100
+@@ -30,6 +30,7 @@
+ 	color_T bookmark_link;
+ #endif
+ 	color_T image_link;
++	color_T link_number;
+ };
+ 
+ struct text_attrib {
+Index: elinks/src/document/html/renderer.c
+===================================================================
+--- elinks.orig/src/document/html/renderer.c	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/document/html/renderer.c	2017-11-01 02:53:10.253130525 +0100
+@@ -1610,12 +1610,17 @@
+ 	unsigned char *fl = format.link;
+ 	unsigned char *ft = format.target;
+ 	unsigned char *fi = format.image;
++	struct text_style old_style = format.style;
+ 	struct form_control *ff = format.form;
+ 	int slen = 0;
+ 	int base = strlen(symkey);
+ 
+ 	format.link = format.target = format.image = NULL;
+ 	format.form = NULL;
++	if (html_context->options->use_link_number_color) {
++		format.style.attr &= ~AT_BOLD;
++		format.style.color.foreground = format.color.link_number;
++	}
+ 
+ 	s[slen++] = '[';
+ 	slen += dec2qwerty(part->link_num, s + 1, symkey, base);
+@@ -1636,6 +1641,7 @@
+ 	format.target = ft;
+ 	format.image = fi;
+ 	format.form = ff;
++	format.style = old_style;
+ }
+ 
+ #define assert_link_variable(old, new) \
+Index: elinks/src/document/options.c
+===================================================================
+--- elinks.orig/src/document/options.c	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/document/options.c	2017-11-01 02:49:18.792203807 +0100
+@@ -45,6 +45,8 @@
+ 	doo->default_color.bookmark_link = get_opt_color("document.colors.bookmark", ses);
+ #endif
+ 	doo->default_color.image_link = get_opt_color("document.colors.image", ses);
++	doo->default_color.link_number = get_opt_color("document.colors.link_number", ses);
++	doo->use_link_number_color = doo->use_document_colors == 0 || get_opt_bool("document.colors.use_link_number_color", ses);
+ 
+ 	doo->active_link.color.foreground = get_opt_color("document.browse.links.active_link.colors.text", ses);
+ 	doo->active_link.color.background = get_opt_color("document.browse.links.active_link.colors.background", ses);
+Index: elinks/src/document/options.h
+===================================================================
+--- elinks.orig/src/document/options.h	2017-11-01 02:49:18.824203935 +0100
++++ elinks/src/document/options.h	2017-11-01 02:49:18.792203807 +0100
+@@ -32,6 +32,7 @@
+ 	color_T bookmark_link;
+ #endif
+ 	color_T image_link;
++	color_T link_number;
+ };
+ 
+ struct document_options_image_link {
+@@ -62,6 +63,8 @@
+ 	struct document_options_colors default_color;
+ 	/** @} */
+ 
++	unsigned int use_link_number_color:1;
++
+ 	/** Color model/optimizations */
+ 	enum color_flags color_flags;
+ 

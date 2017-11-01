@@ -1,0 +1,22 @@
+Avoid underlining active text areas.
+They already have underscores, so underlining them is redundant (and looks a
+bit strange).
+By: yozohida@gmail.com
+---
+ src/viewer/text/link.c |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+Index: elinks/src/viewer/text/link.c
+===================================================================
+--- elinks.orig/src/viewer/text/link.c	2017-11-01 03:02:59.135488278 +0100
++++ elinks/src/viewer/text/link.c	2017-11-01 03:04:11.699778808 +0100
+@@ -181,7 +181,8 @@
+ 	color_flags = (doc_opts->color_flags | COLOR_DECREASE_LIGHTNESS);
+ 	color_mode = doc_opts->color_mode;
+ 
+-	if (doc_opts->active_link.underline)
++	/* avoid underlining text input areas which has underscores */
++	if (doc_opts->active_link.underline && link->type != LINK_FIELD)
+ 		template_.attr |= SCREEN_ATTR_UNDERLINE;
+ 
+ 	/* keep forms in bold */

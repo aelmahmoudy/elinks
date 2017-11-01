@@ -1,0 +1,223 @@
+From 3fea9220d2c3388f2ffb8f5a26be49e141c82318 Mon Sep 17 00:00:00 2001
+From: Yozo Hida <yozohida@gmail.com>
+Date: Mon, 11 May 2009 13:20:48 -0400
+Subject: [PATCH] Add preferred_document_width option.
+
+Option document.browse.preferred_document_width controls the
+width of the document, so that documents are rendered with narrower
+width than screen width.  Makes it easier to read paragraphs.
+
+Patch originally from Shalon Wood <dstar@pele.cx>, see bug #1063.
+
+Instead of using max_document_width as the hard limit to the document
+width, it uses a soft limit, where if the document does not fit (due to
+tables, etc.), then larger width is used.  This reduces the need for
+horizontal scrolling for wide documents.
+
+Also added toggle-document-width action to toggle between preferred
+width and full screen width.  This is bound to 'M' by default.  Initial
+toggle status is determined by document.browse.use_preferred_document_width
+option.
+
+During dumps, document.dump.width option is still used.  Perhaps we
+should consolidate document.dump.width option with
+document.browse.preferred_document_width ?
+---
+ src/config/actions-main.inc        |    1 +
+ src/config/kbdbind.c               |    1 +
+ src/config/options.inc             |   10 ++++++++++
+ src/document/html/parser.c         |    2 +-
+ src/document/html/parser/forms.c   |    8 ++++----
+ src/document/html/parser/general.c |    2 +-
+ src/document/html/renderer.c       |    4 ++--
+ src/document/options.c             |   14 ++++++++++++++
+ src/document/options.h             |    1 +
+ src/document/plain/renderer.c      |    2 +-
+ src/viewer/action.c                |    5 +++++
+ 11 files changed, 41 insertions(+), 9 deletions(-)
+
+Index: elinks/src/config/actions-main.inc
+===================================================================
+--- elinks.orig/src/config/actions-main.inc	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/config/actions-main.inc	2017-11-01 03:12:45.429835668 +0100
+@@ -121,6 +121,7 @@
+ ACTION_(MAIN, "toggle-display-images", TOGGLE_DISPLAY_IMAGES, N__("Toggle displaying of links to images"), 0),
+ ACTION_(MAIN, "toggle-display-tables", TOGGLE_DISPLAY_TABLES, N__("Toggle rendering of tables"), 0),
+ ACTION_(MAIN, "toggle-document-colors", TOGGLE_DOCUMENT_COLORS, N__("Toggle usage of document specific colors"), 0),
++ACTION_(MAIN, "toggle-document-width", TOGGLE_DOCUMENT_WIDTH, N__("Toggle use of document width"), 0),
+ ACTION_(MAIN, "toggle-html-plain", TOGGLE_HTML_PLAIN, N__("Toggle rendering page as HTML / plain text"), 0),
+ ACTION_(MAIN, "toggle-mouse", TOGGLE_MOUSE, N__("Toggle mouse handling"), 0),
+ ACTION_(MAIN, "toggle-numbered-links", TOGGLE_NUMBERED_LINKS, N__("Toggle displaying of links numbers"), 0),
+Index: elinks/src/config/kbdbind.c
+===================================================================
+--- elinks.orig/src/config/kbdbind.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/config/kbdbind.c	2017-11-01 03:12:45.465835813 +0100
+@@ -663,6 +663,7 @@
+ 	{ { 'K',	 KBD_MOD_CTRL }, ACT_MAIN_COOKIES_LOAD },
+ 	{ { 'L',	 KBD_MOD_NONE }, ACT_MAIN_LINK_MENU },
+ 	{ { 'L',	 KBD_MOD_CTRL }, ACT_MAIN_REDRAW },
++	{ { 'M',	 KBD_MOD_NONE }, ACT_MAIN_TOGGLE_DOCUMENT_WIDTH },
+ 	{ { 'N',	 KBD_MOD_NONE }, ACT_MAIN_FIND_NEXT_BACK },
+ 	{ { 'N',	 KBD_MOD_CTRL }, ACT_MAIN_SCROLL_DOWN },
+ 	{ { 'P',	 KBD_MOD_CTRL }, ACT_MAIN_SCROLL_UP },
+Index: elinks/src/config/options.inc
+===================================================================
+--- elinks.orig/src/config/options.inc	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/config/options.inc	2017-11-01 03:12:45.465835813 +0100
+@@ -475,6 +475,16 @@
+ 		"margin_width", 0, 0, 100, 3,
+ 		N_("Horizontal text margin.")),
+ 
++	INIT_OPT_INT("document.browse", N_("Preferred document width"),
++		"preferred_document_width", 0, 0, 9999, 80,
++		N_("Try to fit the document within this width.  If set to zero,"
++		"use screen width.")),
++
++	INIT_OPT_BOOL("document.browse", N_("Whether to use preferred document width"),
++		"use_preferred_document_width", 0, 1,
++		N_("Whether to use preferred document width.  If set to zero,\n"
++		"use screen width.  If set to one, use preferred_document_width.")),
++
+ 	INIT_OPT_BOOL("document.browse", N_("Document meta refresh"),
+ 		"refresh", 0, 1,
+ 		N_("Automatically follow document-specified refresh "
+Index: elinks/src/document/html/parser.c
+===================================================================
+--- elinks.orig/src/document/html/parser.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/html/parser.c	2017-11-01 03:12:45.465835813 +0100
+@@ -805,7 +805,7 @@
+ 	par_format.leftmargin = options->margin;
+ 	par_format.rightmargin = options->margin;
+ 
+-	par_format.width = options->box.width;
++	par_format.width = options->document_width;
+ 	par_format.list_level = par_format.list_number = 0;
+ 	par_format.dd_margin = options->margin;
+ 	par_format.flags = P_DISC;
+Index: elinks/src/document/html/parser/forms.c
+===================================================================
+--- elinks.orig/src/document/html/parser/forms.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/html/parser/forms.c	2017-11-01 03:12:45.465835813 +0100
+@@ -316,8 +316,8 @@
+ 	if (fc->size == -1)
+ 		fc->size = html_context->options->default_form_input_size;
+ 	fc->size++;
+-	if (fc->size > html_context->options->box.width)
+-		fc->size = html_context->options->box.width;
++	if (fc->size > html_context->options->document_width)
++		fc->size = html_context->options->document_width;
+ 	fc->maxlength = get_num(a, "maxlength", cp);
+ 	if (fc->maxlength == -1) fc->maxlength = INT_MAX;
+ 	if (fc->type == FC_CHECKBOX || fc->type == FC_RADIO)
+@@ -678,8 +678,8 @@
+ 		cols = html_context->options->default_form_input_size;
+ 	cols++; /* Add 1 column, other browsers may have different
+ 		   behavior here (mozilla adds 2) --Zas */
+-	if (cols > html_context->options->box.width)
+-		cols = html_context->options->box.width;
++	if (cols > html_context->options->document_width)
++		cols = html_context->options->document_width;
+ 	fc->cols = cols;
+ 
+ 	rows = get_num(attr, "rows", html_context->doc_cp);
+Index: elinks/src/document/html/parser/general.c
+===================================================================
+--- elinks.orig/src/document/html/parser/general.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/html/parser/general.c	2017-11-01 03:12:45.465835813 +0100
+@@ -1080,7 +1080,7 @@
+ 	}
+ 
+ 	if (!html_top->frameset) {
+-		width = html_context->options->box.width;
++		width = html_context->options->document_width;
+ 		height = html_context->options->box.height;
+ 		html_context->options->needs_height = 1;
+ 	} else {
+Index: elinks/src/document/html/renderer.c
+===================================================================
+--- elinks.orig/src/document/html/renderer.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/html/renderer.c	2017-11-01 03:12:45.465835813 +0100
+@@ -1012,7 +1012,7 @@
+ # define overlap_width(x) (x).width
+ #else
+ # define overlap_width(x) int_min((x).width, \
+-	html_context->options->box.width - TABLE_LINE_PADDING)
++	html_context->options->document_width - TABLE_LINE_PADDING)
+ #endif
+ #define overlap(x) int_max(overlap_width(x) - (x).rightmargin, 0)
+ 
+@@ -2562,7 +2562,7 @@
+ 
+ 	part = format_html_part(html_context, start, end, par_format.align,
+ 			        par_format.leftmargin,
+-				document->options.box.width, document,
++				document->options.document_width, document,
+ 			        0, 0, head.source, 1);
+ 
+ 	/* Drop empty allocated lines at end of document if any
+Index: elinks/src/document/options.c
+===================================================================
+--- elinks.orig/src/document/options.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/options.c	2017-11-01 03:12:45.465835813 +0100
+@@ -32,6 +32,20 @@
+ 
+ 	doo->use_document_colors = get_opt_int("document.colors.use_document_colors", ses);
+ 	doo->margin = get_opt_int("document.browse.margin_width", ses);
++
++	doo->document_width = 0;
++	if (get_opt_bool("document.browse.use_preferred_document_width", ses))
++		doo->document_width = get_opt_int("document.browse.preferred_document_width", ses);
++
++	if (ses) {
++		if (doo->document_width <= 0 || doo->document_width > ses->tab->term->width)
++			doo->document_width = ses->tab->term->width;
++	} else {
++		/* Assume we are in -dump mode.  Should we consolidate
++		 * document.dump.width with document.browse.preferred_document_width ? */
++		doo->document_width = get_opt_int("document.dump.width", NULL);
++	}
++
+ 	doo->num_links_key = get_opt_int("document.browse.links.number_keys_select_link", ses);
+ 	doo->meta_link_display = get_opt_int("document.html.link_display", ses);
+ 	doo->default_form_input_size = get_opt_int("document.browse.forms.input_size", ses);
+Index: elinks/src/document/options.h
+===================================================================
+--- elinks.orig/src/document/options.h	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/options.h	2017-11-01 03:12:45.465835813 +0100
+@@ -57,6 +57,7 @@
+ 	int use_document_colors;
+ 	int meta_link_display;
+ 	int default_form_input_size;
++	int document_width;
+ 
+ 	/** @name The default (fallback) colors.
+ 	 * @{ */
+Index: elinks/src/document/plain/renderer.c
+===================================================================
+--- elinks.orig/src/document/plain/renderer.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/document/plain/renderer.c	2017-11-01 03:12:45.465835813 +0100
+@@ -724,7 +724,7 @@
+ 	renderer.lineno = 0;
+ 	renderer.convert_table = convert_table;
+ 	renderer.compress = document->options.plain_compress_empty_lines;
+-	renderer.max_width = document->options.wrap ? document->options.box.width
++	renderer.max_width = document->options.wrap ? document->options.document_width
+ 						    : INT_MAX;
+ 
+ 	document->color.background = document->options.default_style.color.background;
+Index: elinks/src/viewer/action.c
+===================================================================
+--- elinks.orig/src/viewer/action.c	2017-11-01 03:12:45.469835828 +0100
++++ elinks/src/viewer/action.c	2017-11-01 03:12:45.465835813 +0100
+@@ -610,6 +610,11 @@
+ 			toggle_document_option(ses, "document.colors.use_document_colors");
+ 			break;
+ 
++		case ACT_MAIN_TOGGLE_DOCUMENT_WIDTH:
++			toggle_document_option(ses, "document.browse.use_preferred_document_width");
++			redraw_terminal_cls(term);
++			break;
++
+ 		case ACT_MAIN_TOGGLE_HTML_PLAIN:
+ 			toggle_plain_html(ses, ses->doc_view, 0);
+ 			break;
