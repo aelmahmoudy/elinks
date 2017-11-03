@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 10), libtre-dev, libgnutls28-dev, libgcrypt20-dev, 
 	liblua5.1-dev, libbz2-dev, libexpat1-dev,
 	libperl-dev, libkrb5-dev, gettext,
 	autotools-dev, python, xmlto, docbook-utils, pkg-config,
-  liblzma-dev, dh-autoreconf
+  liblzma-dev, libmozjs185-dev | libmozjs-dev | libmozjs-24-dev, dh-autoreconf
 Build-Conflicts: libgc-dev
 Standards-Version: 4.1.1
 Homepage: http://elinks.cz/
