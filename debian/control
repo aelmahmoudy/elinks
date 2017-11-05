@@ -2,12 +2,12 @@ Source: elinks
 Section: web
 Priority: optional
 Maintainer: Moritz Muehlenhoff <jmm@debian.org>
-Build-Depends: debhelper (>= 9), libtre-dev, libgnutls28-dev, libgcrypt20-dev, libidn11-dev,
+Build-Depends: debhelper (>= 9), libtre-dev, libgcrypt20-dev, libidn11-dev,
 	libfsplib-dev, libgpm-dev [linux-any],
 	liblua5.1-dev, libbz2-dev, libexpat1-dev,
 	libperl-dev, libkrb5-dev, gettext,
 	autotools-dev, python, xmlto, docbook-utils, pkg-config,
-  liblzma-dev, libmozjs185-dev | libmozjs-dev | libmozjs-24-dev, dh-autoreconf
+  liblzma-dev, libmozjs185-dev | libmozjs-dev | libmozjs-24-dev, libssl-dev, dh-autoreconf
 Build-Conflicts: libgc-dev
 Standards-Version: 4.1.1
 Homepage: http://elinks.cz/
