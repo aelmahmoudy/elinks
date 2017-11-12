@@ -16,3 +16,4 @@ yozohida/patch9
 yozohida/patch10
 fix-1char-line-display.diff
 gnutls-rehandshake.diff
+gnutls-client-cert.diff
