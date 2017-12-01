@@ -869,6 +869,10 @@ union option_info cmdline_options_info[] = {
 		"configuration values to be used and disables saving of "
 		"runtime state files.")),
 
+	INIT_OPT_BOOL("", N_("Disable libevent"),
+		"no-libevent", 0, 0,
+		N_("Disables libevent.")),
+
 	INIT_OPT_CMDALIAS("", N_("Disable link numbering in dump output"),
 		"no-numbering", OPT_ALIAS_NEGATE, "document.dump.numbering",
 		N_("Prevents printing of link number in dump output.\n"
@@ -927,6 +931,11 @@ union option_info cmdline_options_info[] = {
 		N_("Print given URLs in source form to stdout.")),
 
 	INIT_OPT_COMMAND("", NULL, "stdin", OPT_HIDDEN, redir_cmd, NULL),
+
+	INIT_OPT_BOOL("", N_("Whether to use terminfo"),
+		"terminfo", 0, 0,
+		N_("When enabled, terminfo ncurses functions will be used "
+		"instead of hardcoded sequences.")),
 
 	INIT_OPT_BOOL("", N_("Touch files in ~/.elinks when running with -no-connect/-session-ring"),
 		"touch-files", 0, 0,

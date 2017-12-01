@@ -799,12 +799,13 @@ init_html_parser(struct uri *uri, struct document_options *options,
 	format.color.bookmark_link = options->default_color.bookmark_link;
 #endif
 	format.color.image_link = options->default_color.image_link;
+	format.color.link_number = options->default_color.link_number;
 
 	par_format.align = ALIGN_LEFT;
 	par_format.leftmargin = options->margin;
 	par_format.rightmargin = options->margin;
 
-	par_format.width = options->box.width;
+	par_format.width = options->document_width;
 	par_format.list_level = par_format.list_number = 0;
 	par_format.dd_margin = options->margin;
 	par_format.flags = P_DISC;

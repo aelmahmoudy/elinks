@@ -32,6 +32,20 @@ init_document_options(struct session *ses, struct document_options *doo)
 
 	doo->use_document_colors = get_opt_int("document.colors.use_document_colors", ses);
 	doo->margin = get_opt_int("document.browse.margin_width", ses);
+
+	doo->document_width = 0;
+	if (get_opt_bool("document.browse.use_preferred_document_width", ses))
+		doo->document_width = get_opt_int("document.browse.preferred_document_width", ses);
+
+	if (ses) {
+		if (doo->document_width <= 0 || doo->document_width > ses->tab->term->width)
+			doo->document_width = ses->tab->term->width;
+	} else {
+		/* Assume we are in -dump mode.  Should we consolidate
+		 * document.dump.width with document.browse.preferred_document_width ? */
+		doo->document_width = get_opt_int("document.dump.width", NULL);
+	}
+
 	doo->num_links_key = get_opt_int("document.browse.links.number_keys_select_link", ses);
 	doo->meta_link_display = get_opt_int("document.html.link_display", ses);
 	doo->default_form_input_size = get_opt_int("document.browse.forms.input_size", ses);
@@ -45,9 +59,13 @@ init_document_options(struct session *ses, struct document_options *doo)
 	doo->default_color.bookmark_link = get_opt_color("document.colors.bookmark", ses);
 #endif
 	doo->default_color.image_link = get_opt_color("document.colors.image", ses);
+	doo->default_color.link_number = get_opt_color("document.colors.link_number", ses);
+	doo->use_link_number_color = get_opt_bool("document.colors.use_link_number_color", ses);
 
 	doo->active_link.color.foreground = get_opt_color("document.browse.links.active_link.colors.text", ses);
 	doo->active_link.color.background = get_opt_color("document.browse.links.active_link.colors.background", ses);
+	doo->active_link.insert_mode_color.foreground = get_opt_color("document.browse.links.active_link.insert_mode_colors.text", ses);
+	doo->active_link.insert_mode_color.background = get_opt_color("document.browse.links.active_link.insert_mode_colors.background", ses);
 
 	if (get_opt_bool("document.colors.increase_contrast", ses))
 		doo->color_flags |= COLOR_INCREASE_CONTRAST;

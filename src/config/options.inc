@@ -294,6 +294,18 @@ static union option_info config_options_info[] = {
 		"text", 0, "black",
 		N_("Default text color.")),
 
+	INIT_OPT_TREE("document.browse.links.active_link", N_("Insert mode colors"),
+		"insert_mode_colors", 0,
+		N_("Insert mode colors.")),
+
+	INIT_OPT_COLOR("document.browse.links.active_link.insert_mode_colors", N_("Background color for text field in insert mode"),
+		"background", 0, "#0000ff",
+		N_("Background color for text field in insert mode")),
+
+	INIT_OPT_COLOR("document.browse.links.active_link.insert_mode_colors", N_("Text color for text field in insert mode"),
+		"text", 0, "black",
+		N_("Text color for text field in insert mode.")),
+
 	INIT_OPT_BOOL("document.browse.links.active_link", N_("Enable color"),
 		"enable_color", 0, 0,
 		N_("Enable use of the active link background and text color "
@@ -460,8 +472,18 @@ static union option_info config_options_info[] = {
 
 
 	INIT_OPT_INT("document.browse", N_("Horizontal text margin"),
-		"margin_width", 0, 0, 9, 3,
+		"margin_width", 0, 0, 100, 3,
 		N_("Horizontal text margin.")),
+
+	INIT_OPT_INT("document.browse", N_("Preferred document width"),
+		"preferred_document_width", 0, 0, 9999, 0,
+		N_("Try to fit the document within this width.  If set to zero,"
+		"use screen width.")),
+
+	INIT_OPT_BOOL("document.browse", N_("Whether to use preferred document width"),
+		"use_preferred_document_width", 0, 1,
+		N_("Whether to use preferred document width.  If set to zero,\n"
+		"use screen width.  If set to one, use preferred_document_width.")),
 
 	INIT_OPT_BOOL("document.browse", N_("Document meta refresh"),
 		"refresh", 0, 1,
@@ -620,6 +642,15 @@ static union option_info config_options_info[] = {
 		N_("Default directory color.\n"
 		"\n"
 		"See document.browse.links.color_dirs option.")),
+
+	INIT_OPT_BOOL("document.colors", N_("Use link number color"),
+	        "use_link_number_color", 0, 0,
+		N_("Whether to use link number color even when colors "
+		"specified by the document are used.")),
+
+	INIT_OPT_COLOR("document.colors", N_("Link number color"),
+		"link_number", 0, "#0000ff",
+		N_("Default link number color.")),
 
 	/* Compatibility alias: added by jonas at 2005-05-31, 0.11.CVS. */
 	INIT_OPT_ALIAS("document.colors", "allow_dark_on_black", OPT_ALIAS_NEGATE,
