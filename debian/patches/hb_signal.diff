@@ -1,0 +1,12 @@
+Index: elinks/src/ecmascript/spidermonkey/heartbeat.c
+===================================================================
+--- elinks.orig/src/ecmascript/spidermonkey/heartbeat.c	2017-12-01 11:55:28.977194160 +0100
++++ elinks/src/ecmascript/spidermonkey/heartbeat.c	2017-12-01 12:14:23.313735789 +0100
+@@ -5,6 +5,7 @@
+ #endif
+ 
+ #include <sys/time.h>    /* setitimer(2) */
++#include <signal.h>
+ 
+ #include "elinks.h"
+ 

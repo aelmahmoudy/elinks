@@ -4,3 +4,4 @@
 10-reproducible-build.diff
 14_debug_disable_Werror.diff
 16_POST_BUFFER_SIZE.diff
+hb_signal.diff
