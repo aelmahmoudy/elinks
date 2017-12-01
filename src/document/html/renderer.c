@@ -349,17 +349,17 @@ get_format_screen_char(struct html_context *html_context,
 		copy_struct(&ta_cache, &format.style);
 		struct text_style final_style = format.style;
 
-		if (link_state != LINK_STATE_NONE
-		    && html_context->options->underline_links) {
-			final_style.attr |= AT_UNDERLINE;
-		}
-
 		get_screen_char_template(&schar_cache, html_context->options, final_style);
 	}
 
 	if (!!(schar_cache.attr & SCREEN_ATTR_UNSEARCHABLE)
 	    ^ !!renderer_context.nosearchable) {
 		schar_cache.attr ^= SCREEN_ATTR_UNSEARCHABLE;
+	}
+	if (link_state != LINK_STATE_NONE
+	    && !format.form
+	    && html_context->options->underline_links) {
+		schar_cache.attr |= SCREEN_ATTR_UNDERLINE;
 	}
 
 	return &schar_cache;
@@ -1013,7 +1013,7 @@ del_chars(struct html_context *html_context, int x, int y)
 # define overlap_width(x) (x).width
 #else
 # define overlap_width(x) int_min((x).width, \
-	html_context->options->box.width - TABLE_LINE_PADDING)
+	html_context->options->document_width - TABLE_LINE_PADDING)
 #endif
 #define overlap(x) int_max(overlap_width(x) - (x).rightmargin, 0)
 
@@ -1611,12 +1611,17 @@ put_link_number(struct html_context *html_context)
 	unsigned char *fl = format.link;
 	unsigned char *ft = format.target;
 	unsigned char *fi = format.image;
+	struct text_style old_style = format.style;
 	struct form_control *ff = format.form;
 	int slen = 0;
 	int base = strlen(symkey);
 
 	format.link = format.target = format.image = NULL;
 	format.form = NULL;
+	if (html_context->options->use_link_number_color) {
+		format.style.attr &= ~AT_BOLD;
+		format.style.color.foreground = format.color.link_number;
+	}
 
 	s[slen++] = '[';
 	slen += dec2qwerty(part->link_num, s + 1, symkey, base);
@@ -1637,6 +1642,7 @@ put_link_number(struct html_context *html_context)
 	format.target = ft;
 	format.image = fi;
 	format.form = ff;
+	format.style = old_style;
 }
 
 #define assert_link_variable(old, new) \
@@ -2557,7 +2563,7 @@ render_html_document(struct cache_entry *cached, struct document *document,
 
 	part = format_html_part(html_context, start, end, par_format.align,
 			        par_format.leftmargin,
-				document->options.box.width, document,
+				document->options.document_width, document,
 			        0, 0, head.source, 1);
 
 	/* Drop empty allocated lines at end of document if any

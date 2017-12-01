@@ -20,6 +20,7 @@ struct active_link_options {
 	unsigned int bold:1;
 	unsigned int invert:1;
 	struct active_link_options_colors color;
+	struct active_link_options_colors insert_mode_color;
 };
 
 /** This mostly acts as a option cache so rendering will be faster. However it
@@ -32,6 +33,7 @@ struct document_options_colors {
 	color_T bookmark_link;
 #endif
 	color_T image_link;
+	color_T link_number;
 };
 
 struct document_options_image_link {
@@ -55,12 +57,15 @@ struct document_options {
 	int use_document_colors;
 	int meta_link_display;
 	int default_form_input_size;
+	int document_width;
 
 	/** @name The default (fallback) colors.
 	 * @{ */
 	struct text_style default_style;
 	struct document_options_colors default_color;
 	/** @} */
+
+	unsigned int use_link_number_color:1;
 
 	/** Color model/optimizations */
 	enum color_flags color_flags;

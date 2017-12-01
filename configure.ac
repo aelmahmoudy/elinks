@@ -13,6 +13,7 @@ AC_PREREQ(2.61)
 AC_INIT
 AC_CONFIG_SRCDIR([src/main/main.c])
 AC_CONFIG_AUX_DIR(config)
+AC_CONFIG_MACRO_DIR([config/m4])
 
 PACKAGE=elinks
 VERSION=0.13.GIT
@@ -25,6 +26,8 @@ AC_CONFIG_HEADERS(config.h)
 AC_CHECK_PROG(ACLOCAL,[aclocal],[aclocal],[config/missing aclocal])
 AC_CHECK_PROG(AUTOCONF,[autoconf],[autoconf],[config/missing autoconf])
 AC_CHECK_PROG(AUTOHEADER,[autoheader],[autoheader],[config/missing autoheader])
+
+AC_USE_SYSTEM_EXTENSIONS
 
 MAKE=
 
@@ -195,7 +198,6 @@ AC_CHECK_HEADERS(sys/fmutex.h)
 AC_CHECK_HEADERS(sys/ioctl.h sys/sockio.h)
 AC_CHECK_HEADERS(sys/resource.h)
 AC_CHECK_HEADERS(sys/select.h)
-AC_CHECK_HEADERS(sys/signal.h)
 AC_CHECK_HEADERS(sys/socket.h)
 AC_CHECK_HEADERS(sys/time.h)
 AC_CHECK_HEADERS(sys/utsname.h)
@@ -207,7 +209,7 @@ AC_CHECK_HEADERS([net/if.h], [], [],
 AC_CHECK_HEADERS(stdint.h inttypes.h)
 AC_CHECK_HEADERS(locale.h pwd.h)
 AC_CHECK_HEADERS(termios.h)
-
+AC_CHECK_HEADERS(poll.h)
 
 AC_CHECK_HEADERS(sys/un.h,
 	[CONFIG_INTERLINK=yes
@@ -312,17 +314,12 @@ AC_CHECK_FUNCS(kill, HAVE_KILL=yes)
 
 AC_CHECK_FUNCS(fpathconf, HAVE_FPATHCONF=yes)
 
+AC_CHECK_FUNCS(poll, HAVE_POLL=yes)
+
 if test x"$HAVE_RAISE" = x; then
 	if test x"$HAVE_KILL" = x || test x"$HAVE_GETPID" = x; then
 		AC_MSG_ERROR([Unable to emulate raise()])
 	fi
-fi
-
-AC_CACHE_CHECK([for __va_copy],el_cv_HAVE_VA_COPY,[
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>
-va_list ap1,ap2;]], [[__va_copy(ap1,ap2);]])],[el_cv_HAVE_VA_COPY=yes],[el_cv_HAVE_VA_COPY=no])])
-if test x"$el_cv_HAVE_VA_COPY" = x"yes"; then
-	EL_DEFINE(HAVE_VA_COPY, __va_copy)
 fi
 
 AC_CACHE_CHECK([for sysconf(_SC_PAGE_SIZE)],el_cv_HAVE_SC_PAGE_SIZE,[
@@ -475,6 +472,10 @@ AC_DEFUN([EL_CONFIG_OPTIONAL_LIBRARY],
 EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_GPM, gpm, gpm.h, gpm, Gpm_Open,
 	[  --without-gpm           disable gpm (mouse) support])
 
+
+EL_CONFIG_OPTIONAL_LIBRARY(CONFIG_TERMINFO, terminfo, term.h, tinfo, setupterm,
+	[  --with-terminfo         enable terminfo support])
+
 # ELinks calls deflateInit2 with windowBits = MAX_WBITS | 32, to
 # enable automatic decoding of both zlib and gzip headers.  This
 # feature was added in zlib 1.2.0.2; earlier versions return an error.
@@ -514,7 +515,7 @@ if test "$enable_gssapi" = "yes"; then
 	GSSAPI_LIBS=`krb5-config --libs gssapi`
 	CFLAGS="$GSSAPI_CFLAGS $CFLAGS"
 	LIBS="$GSSAPI_LIBS $LIBS"
- 	EL_CONFIG(CONFIG_GSSAPI, [GssApi])
+	EL_CONFIG(CONFIG_GSSAPI, [GssApi])
 else
 	AC_MSG_RESULT(no)
 fi
@@ -1187,6 +1188,7 @@ else
 			# gnutls_priority_set_direct in GNUTLS 2.1.7 (released
 			# 2007-11-29).
 			AC_CHECK_FUNCS([gnutls_priority_set_direct])
+			AC_CHECK_FUNCS([gnutls_certificate_set_x509_system_trust])
 		fi
 
 		EL_RESTORE_FLAGS
@@ -1210,6 +1212,49 @@ else
 		AC_MSG_ERROR([[GNUTLS (1.2 or later) not found.  ELinks no longer supports GNUTLS 1.1.]])
 	fi
 fi
+
+# ========
+# libevent
+# ========
+CONFIG_LIBEV=no
+AC_ARG_WITH(libev,    [  --with-libev            compile with libev (libevent compatibility mode)],
+            [if test "$withval" = yes; then enable_libev=yes; else enable_libev=no; fi])
+cf_have_libev=no
+if test "$enable_libev" = yes; then
+	AC_CHECK_HEADERS(event.h libev/event.h)
+	if test "$ac_cv_header_event_h" = yes -o "$ac_cv_header_libev_event_h"; then
+		AC_CHECK_LIB(ev, event_loop)
+		if test "$ac_cv_lib_ev_event_loop" = yes; then
+			cf_have_libev=yes
+			EL_CONFIG(CONFIG_LIBEV, [libev])
+		fi
+	fi
+fi
+AC_SUBST(CONFIG_LIBEV)
+
+AC_ARG_WITH(libevent, [  --with-libevent         compile with libevent. Note that --with-libev has precedence],
+            [if test "$withval" = yes; then enable_libevent=yes; else enable_libevent=no; fi])
+
+CONFIG_LIBEVENT=no
+cf_have_libevent=no
+if test "$enable_libevent" = yes -a "$cf_have_libev" = no; then
+	AC_CHECK_HEADERS(event.h ev-event.h)
+	if test "$ac_cv_header_event_h" = yes; then
+		AC_CHECK_LIB(event, event_loop)
+		if test "$ac_cv_lib_event_event_loop" = yes; then
+			cf_have_libevent=yes
+			EL_CONFIG(CONFIG_LIBEVENT, [libevent])
+		fi
+	fi
+fi
+AC_SUBST(CONFIG_LIBEVENT)
+
+if test "$cf_have_libev" = yes -o "$cf_have_libevent" = yes; then
+	AC_HAVE_FUNCS(event_base_set event_get_version event_get_method event_base_free event_base_new event_reinit event_base_get_method event_config_set_flag event_get_struct_event_size)
+fi
+
+EL_LOG_CONFIG([CONFIG_LIBEV], [[libev]], [[$cf_have_libev]])
+EL_LOG_CONFIG([CONFIG_LIBEVENT], [[libevent]], [[$cf_have_libevent]])
 
 # Final SSL setup
 
@@ -1282,7 +1327,7 @@ AC_CHECK_HEADERS(execinfo.h, HAVE_EXECINFO=yes, HAVE_EXECINFO=no)
 # Gettext grey zone. Beware.
 # ===================================================================
 
-ALL_LINGUAS="af be bg ca cs da de el es et fi fr gl hr hu id is it lt nl nb pl pt pt_BR ro ru sk sr sv tr uk"
+ALL_LINGUAS="af be bg ca cs da de el es et fi fr gl hr hu id is it ja lt nl nb pl pt pt_BR ro ru sk sr sv tr uk"
 
 AM_GNU_GETTEXT
 
@@ -1731,7 +1776,7 @@ if test "x$ac_cv_c_compiler_gnu" = "xyes"; then
     4.5*)
       CFLAGS="$CFLAGS -fno-strict-aliasing -Wno-pointer-sign -Wno-enum-compare"
       ;;
-    4.*|5.*|6.*)
+    4.*|5.*|6.*|7.*)
       # Do not show warnings related to (char * | unsigned char *) type
       # difference.
       CFLAGS="$CFLAGS -fno-strict-aliasing -Wno-pointer-sign"
