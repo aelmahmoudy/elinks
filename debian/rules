@@ -11,3 +11,5 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	make V=1
+	# Build docs:
+	dh_auto_build --builddir doc -- all-docs

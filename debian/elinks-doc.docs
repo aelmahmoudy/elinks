@@ -1,7 +1,7 @@
-doc/html/manual.html
-doc/html/hacking.html
-doc/html/perl.html
-doc/html/perl-hooks.html
+doc/manual.html
+doc/hacking.html
+doc/perl.html
+doc/perl-hooks.html
 doc/small.txt
 doc/feedback.txt
 doc/lua-scripting.txt
