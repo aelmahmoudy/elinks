@@ -9,6 +9,7 @@ Build-Depends: debhelper (>= 9), libtre-dev, libgnutls28-dev, libgcrypt20-dev, l
 	autotools-dev, python, xmlto, docbook-utils, pkg-config,
   liblzma-dev, libmozjs185-dev | libmozjs-dev | libmozjs-24-dev, dh-autoreconf,
   libncurses5-dev
+  ,libev-libevent-dev
 Build-Conflicts: libgc-dev
 Standards-Version: 4.1.1
 Homepage: http://elinks.cz/
