@@ -1,3 +1,35 @@
+elinks (0.13~20180625-1~2.gbp1e60a4) UNRELEASED; urgency=medium
+
+  ** SNAPSHOT build @1e60a490e71af4ba6437cd3f034d3343cc524644 **
+
+  * New upstream release
+  * Add git-buildpackage conf file
+  * Refreshed patches & removed patches that were includes upstream.
+    Removed patches:
+    08-drop-deprecated-gnutls-functions.diff
+    08_524696_fix_imdb_urls.diff
+    09-Switch-to-use-lua-5.1.diff
+  * debian/watch: Add pgpsigurlmangle
+  * Add libgcrypt20-dev to build deps
+  * Revert to debhelper 9 for jessie
+  * Re-added 14_debug_disable_Werror.diff to enable development versions debug
+    support
+  * Added 16_POST_BUFFER_SIZE.diff patch which to enable  uploading large files
+    over https:// connections.
+  * Add ascii-replacement-utf8-console.diff patch to print ASCII replacement
+    for characters not found in current codepage in utf8 mode
+  * Enable LZMA support
+  * Enable BitTorrent
+  * Enable NNTP Support
+  * Enable Unicode combining characters support
+  * Enable EX mode support
+  * Enable SpiderMonkey support
+  * Enable terminfo support
+  * Build documentation
+  * Build with libev
+
+ -- أحمد المحمودي (Ahmed El-Mahmoudy) <aelmahmoudy@users.sourceforge.net>  Wed, 01 Nov 2017 02:28:15 +0100
+
 elinks (0.12~pre6-13) unstable; urgency=medium
 
   * Mark elinks-data and elinks-doc Multi-Arch: foreign, thanks to
