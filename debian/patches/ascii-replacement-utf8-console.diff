@@ -1,26 +1,23 @@
-Description: In non-utf-8 mode, if a character is not in the current codepage,
-it may be replaced by an ascii string. For example, "&#x03d0;" is shown as
-"beta". The set of substitutions is in Unicode/7bitrepl.lnx.
+From 0d07b47d0269b7702bee0d104e061b15dc19d4b1 Mon Sep 17 00:00:00 2001
+From: sgerwk <sgerwk@aol.com>
+Date: Mon, 4 Jun 2018 01:10:07 +0200
+Subject: [PATCH] ascii replacements for linux virtual terminals
 
-This patch does the same in a linux console in utf-8 mode. It obtains the
-unicode mapping for the current font, and if a character to be displayed is not
-in it but has a replacement, it shows the replacement instead.
+---
+ src/document/html/renderer.c                     |  15 ++-
+ src/document/html/test/parse-meta-refresh-test.c |   5 +
+ src/intl/charsets.c                              | 124 +++++++++++++++++++++--
+ src/intl/charsets.h                              |   2 +
+ src/network/ssl/test/match-hostname-test.c       |   5 +
+ src/protocol/ftp/ftp-parser.c                    |   5 +
+ src/protocol/test/uri-test.c                     |   5 +
+ 7 files changed, 152 insertions(+), 9 deletions(-)
 
-I believe the concept is useful, and the implementation kind of works.
-However, a number of things are not done exactly as they should:
-
-- getting the unicode mapping should go in osdep.c instead of charsets.c
-- the search in "codepoints" is done once for getting the size of the
-   replacement and one for the actual replacement
-- the inclusion of sys/kd.h should be conditional
-- allocating charsel*20 bytes for a line may be an overkill, and 20 is a
-   magic number (should be the maximal size of an ascii replacement)
-
-Index: elinks/src/document/html/renderer.c
-===================================================================
---- elinks.orig/src/document/html/renderer.c	2017-11-21 01:36:59.873355678 +0100
-+++ elinks/src/document/html/renderer.c	2017-11-21 02:25:34.961027034 +0100
-@@ -527,8 +527,10 @@
+diff --git a/src/document/html/renderer.c b/src/document/html/renderer.c
+index 8426825..a0be511 100644
+--- a/src/document/html/renderer.c
++++ b/src/document/html/renderer.c
+@@ -527,8 +527,10 @@ set_hline(struct html_context *html_context, unsigned char *chars, int charslen,
  		 * incomplete character in document->buf, then
  		 * the first byte of input can result in a double-cell
  		 * character, so we must reserve one extra element.  */
@@ -32,7 +29,7 @@ Index: elinks/src/document/html/renderer.c
  		if (orig_length < 0) /* error */
  			return 0;
  		if (utf8) {
-@@ -640,7 +642,16 @@
+@@ -640,7 +642,16 @@ good_char:
  #endif /* CONFIG_COMBINE */
  				part->spaces[x] = (data == UCS_SPACE);
  
@@ -50,10 +47,26 @@ Index: elinks/src/document/html/renderer.c
  					continue;
  				else if (unicode_to_cell(data) == 2) {
  					schar->data = (unicode_val_T)data;
-Index: elinks/src/intl/charsets.c
-===================================================================
---- elinks.orig/src/intl/charsets.c	2017-11-21 01:36:59.873355678 +0100
-+++ elinks/src/intl/charsets.c	2017-11-21 01:57:58.306394162 +0100
+diff --git a/src/document/html/test/parse-meta-refresh-test.c b/src/document/html/test/parse-meta-refresh-test.c
+index 35dca74..d75c0ef 100644
+--- a/src/document/html/test/parse-meta-refresh-test.c
++++ b/src/document/html/test/parse-meta-refresh-test.c
+@@ -14,6 +14,11 @@
+ #include "document/html/parse-meta-refresh.h"
+ #include "util/memory.h"
+ 
++/* fake tty get function, needed for charsets.c */
++int get_ctl_handle() {
++	return -1;
++}
++
+ struct meta_refresh_test_case
+ {
+ 	const unsigned char *content;
+diff --git a/src/intl/charsets.c b/src/intl/charsets.c
+index 5b30c85..dc3d423 100644
+--- a/src/intl/charsets.c
++++ b/src/intl/charsets.c
 @@ -23,6 +23,9 @@
  #include <iconv.h>
  #endif
@@ -72,7 +85,7 @@ Index: elinks/src/intl/charsets.c
  
  
  /* Fix namespace clash on MacOS. */
-@@ -185,6 +189,46 @@
+@@ -185,6 +189,46 @@ new_translation_table(struct conv_table *p)
  	}										\
  }											\
  
@@ -119,7 +132,7 @@ Index: elinks/src/intl/charsets.c
  static const unicode_val_T strange_chars[32] = {
  0x20ac, 0x0000, 0x002a, 0x0000, 0x201e, 0x2026, 0x2020, 0x2021,
  0x005e, 0x2030, 0x0160, 0x003c, 0x0152, 0x0000, 0x0000, 0x0000,
-@@ -240,8 +284,15 @@
+@@ -240,8 +284,15 @@ static unsigned char utf_buffer[7];
  NONSTATIC_INLINE unsigned char *
  encode_utf8(unicode_val_T u)
  {
@@ -135,7 +148,7 @@ Index: elinks/src/intl/charsets.c
  	if (u < 0x80)
  		utf_buffer[0] = u;
  	else if (u < 0x800)
-@@ -610,6 +661,13 @@
+@@ -610,6 +661,13 @@ invalid_arg:
  NONSTATIC_INLINE int
  unicode_to_cell(unicode_val_T c)
  {
@@ -149,29 +162,28 @@ Index: elinks/src/intl/charsets.c
  	if (c == 0x200e || c == 0x200f)
  		return 0;
  	if (c >= 0x1100
-@@ -862,8 +920,8 @@
+@@ -861,10 +919,6 @@ add_utf8(struct conv_table *ct, unicode_val_T u, const unsigned char *str)
+ 		if (ct[*p].t) ct = ct[*p].u.tbl;
  		else {
  			struct conv_table *nct;
- 
+-
 -			assertm(ct[*p].u.str == no_str, "bad utf encoding #1");
 -			if_assert_failed return;
-+			// assertm(ct[*p].u.str == no_str, "bad utf encoding #1");
-+			// if_assert_failed return;
- 
+-
  			nct = mem_calloc(256, sizeof(*nct));
  			if (!nct) return;
-@@ -875,8 +933,8 @@
+ 			new_translation_table(nct);
+@@ -875,9 +929,6 @@ add_utf8(struct conv_table *ct, unicode_val_T u, const unsigned char *str)
  		p++;
  	}
  
 -	assertm(!ct[*p].t, "bad utf encoding #2");
 -	if_assert_failed return;
-+	// assertm(!ct[*p].t, "bad utf encoding #2");
-+	// if_assert_failed return;
- 
+-
  	if (ct[*p].u.str == no_str)
  		ct[*p].u.str = str;
-@@ -1598,9 +1656,71 @@
+ }
+@@ -1598,9 +1649,68 @@ get_cp_index(const unsigned char *name)
  
  #endif /* USE_FASTFIND */
  
@@ -199,12 +211,11 @@ Index: elinks/src/intl/charsets.c
 +		return ;
 +	}
 +
-+	table.entry_ct = -1;
++	table.entry_ct = 0;
 +	table.entries = NULL;
 +	res = ioctl(tty, GIO_UNIMAP, &table);
-+	if (res) {
++	if (res && errno != ENOMEM) {
 +		perror("GIO_UNIMAP");
-+		close(tty);
 +		codepoints.size = -1;
 +		return;
 +	}
@@ -218,14 +229,12 @@ Index: elinks/src/intl/charsets.c
 +		return;
 +	}
 +
-+	close(tty);
-+
 +	codepoints.size = table.entry_ct;
 +	codepoints.list = malloc(table.entry_ct * sizeof(unicode_val_T));
 +	for (i = 0; i < table.entry_ct; i++)
 +		codepoints.list[i] = table.entries[i].unicode;
 +
-+ 	qsort(codepoints.list, codepoints.size, sizeof(unicode_val_T), cmpint);
++	qsort(codepoints.list, codepoints.size, sizeof(unicode_val_T), cmpint);
 +
 +	// for (i = 0; i < codepoints.size; i++)
 +	//	fprintf(stderr, "U+%04X\n", codepoints.list[i]);
@@ -243,11 +252,11 @@ Index: elinks/src/intl/charsets.c
  #ifdef USE_FASTFIND
  	fastfind_index(&ff_charsets_index, FF_COMPRESS);
  #endif
-Index: elinks/src/intl/charsets.h
-===================================================================
---- elinks.orig/src/intl/charsets.h	2017-11-21 01:36:59.873355678 +0100
-+++ elinks/src/intl/charsets.h	2017-11-21 01:59:03.542655352 +0100
-@@ -156,6 +156,8 @@
+diff --git a/src/intl/charsets.h b/src/intl/charsets.h
+index 5b8fcb3..9ddfc7f 100644
+--- a/src/intl/charsets.h
++++ b/src/intl/charsets.h
+@@ -156,6 +156,8 @@ unsigned char *utf8_step_forward(unsigned char *, unsigned char *,
  				 int, enum utf8_step, int *);
  unsigned char *utf8_step_backward(unsigned char *, unsigned char *,
  				  int, enum utf8_step, int *);
@@ -256,3 +265,54 @@ Index: elinks/src/intl/charsets.h
  int unicode_to_cell(unicode_val_T);
  unicode_val_T unicode_fold_label_case(unicode_val_T);
  int strlen_utf8(unsigned char **);
+diff --git a/src/network/ssl/test/match-hostname-test.c b/src/network/ssl/test/match-hostname-test.c
+index fbdf6fa..4049365 100644
+--- a/src/network/ssl/test/match-hostname-test.c
++++ b/src/network/ssl/test/match-hostname-test.c
+@@ -12,6 +12,11 @@
+ #include "network/ssl/match-hostname.h"
+ #include "util/string.h"
+ 
++/* fake tty get function, needed for charsets.c */
++int get_ctl_handle() {
++	return -1;
++}
++
+ struct match_hostname_pattern_test_case
+ {
+ 	const unsigned char *pattern;
+diff --git a/src/protocol/ftp/ftp-parser.c b/src/protocol/ftp/ftp-parser.c
+index ece4d2f..77c0d10 100644
+--- a/src/protocol/ftp/ftp-parser.c
++++ b/src/protocol/ftp/ftp-parser.c
+@@ -15,6 +15,11 @@
+ #include "protocol/ftp/parse.h"
+ #include "util/test.h"
+ 
++/* fake tty get function, needed for charsets.c */
++int get_ctl_handle() {
++	return -1;
++}
++
+ int
+ main(int argc, char *argv[])
+ {
+diff --git a/src/protocol/test/uri-test.c b/src/protocol/test/uri-test.c
+index d694151..9046834 100644
+--- a/src/protocol/test/uri-test.c
++++ b/src/protocol/test/uri-test.c
+@@ -10,6 +10,11 @@
+ #include "protocol/uri.h"
+ #include "util/string.h"
+ 
++/* fake tty get function, needed for charsets.c */
++int get_ctl_handle() {
++	return -1;
++}
++
+ int
+ main(int argc, char **argv)
+ {
+-- 
+2.11.0
+
