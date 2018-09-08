@@ -11,7 +11,7 @@ Build-Depends: debhelper (>= 9), libtre-dev, libgnutls28-dev, libgcrypt20-dev, l
   libncurses5-dev
   ,libev-libevent-dev
 Build-Conflicts: libgc-dev
-Standards-Version: 4.1.1
+Standards-Version: 4.2.1
 Homepage: http://elinks.cz/
 
 Package: elinks
